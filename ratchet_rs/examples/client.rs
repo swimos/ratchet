@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use bytes::BytesMut;
-use ratchet::{subscribe, Error, Message, PayloadType, UpgradedClient, WebSocketConfig};
+use ratchet_rs::{subscribe, Error, Message, PayloadType, UpgradedClient, WebSocketConfig};
 use tokio::net::TcpStream;
 
 #[tokio::main]

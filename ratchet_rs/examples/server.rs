@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use bytes::BytesMut;
-use ratchet::{
+use ratchet_rs::{
     Error, Message, NoExtProvider, PayloadType, ProtocolRegistry, UpgradedServer, WebSocketConfig,
 };
 use tokio::net::TcpListener;
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Error> {
     while let Some(socket) = incoming.next().await {
         let socket = socket?;
 
-        let upgrader = ratchet::accept_with(
+        let upgrader = ratchet_rs::accept_with(
             socket,
             WebSocketConfig::default(),
             NoExtProvider,

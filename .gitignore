@@ -4,5 +4,5 @@
 
 .idea
 
-ratchet/autobahn/client
-ratchet/autobahn/server
+ratchet_rs/autobahn/client
+ratchet_rs/autobahn/server

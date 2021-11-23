@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "ratchet",
+    "ratchet_rs",
     "ratchet_core",
     "ratchet_deflate",
     "ratchet_ext",
