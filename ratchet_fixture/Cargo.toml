@@ -2,6 +2,12 @@
 name = "ratchet_fixture"
 version = "0.1.0"
 edition = "2021"
+description = "Ratchet fixture"
+keywords = ["websocket", "async", "futures", "tokio"]
+categories = ["network-programming", "asynchronous", "web-programming::websocket"]
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
 ratchet = { path = "../ratchet", features = ["split", "deflate", "fixture"] }

@@ -8,7 +8,7 @@ keywords = ["websocket", "async", "futures", "tokio"]
 categories = ["network-programming", "asynchronous", "web-programming::websocket"]
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/swimos/ratchet/ratchet_ext"
+repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
 http = "0.2.3"

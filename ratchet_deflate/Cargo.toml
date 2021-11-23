@@ -8,7 +8,7 @@ keywords = ["websocket", "async", "futures", "tokio", "deflate"]
 categories = ["network-programming", "asynchronous", "web-programming::websocket"]
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/swimos/ratchet/ratchet_deflate"
+repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
 ratchet_ext = { path = "../ratchet_ext" }
