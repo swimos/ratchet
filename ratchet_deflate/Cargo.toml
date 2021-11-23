@@ -11,7 +11,7 @@ readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
-ratchet_ext = { path = "../ratchet_ext" }
+ratchet_ext = { version = "0.1.0", path = "../ratchet_ext" }
 thiserror = "1.0"
 http = "0.2.3"
 bytes = "1.0"
