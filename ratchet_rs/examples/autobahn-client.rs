@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use bytes::BytesMut;
+use ratchet_deflate::{Deflate, DeflateExtProvider};
 use ratchet_rs::UpgradedClient;
 use ratchet_rs::{Error, Message, PayloadType, ProtocolRegistry, WebSocketConfig};
-use ratchet_deflate::{Deflate, DeflateExtProvider};
 use tokio::net::TcpStream;
 
 const AGENT: &str = "Ratchet";

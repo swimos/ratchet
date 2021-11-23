@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_deflate"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 description = "Permessage Deflate for Ratchet"
@@ -11,7 +11,7 @@ readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
-ratchet_ext = { version = "0.1.0", path = "../ratchet_ext" }
+ratchet_ext = { version = "0.1.1", path = "../ratchet_ext" }
 thiserror = "1.0"
 http = "0.2.3"
 bytes = "1.0"

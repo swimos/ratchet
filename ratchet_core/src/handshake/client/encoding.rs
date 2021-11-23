@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::errors::{Error, ErrorKind, HttpError};
-use crate::handshake::client::Nonce;
-use crate::handshake::{
-    apply_to, ProtocolRegistry, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
-};
 use base64::encode_config_slice;
 use bytes::{BufMut, BytesMut};
 use http::header::{AsHeaderName, HeaderName, IntoHeaderName};
 use http::request::Parts;
 use http::{header, HeaderMap, HeaderValue, Method, Request, Version};
+
 use ratchet_ext::ExtensionProvider;
+
+use crate::errors::{Error, ErrorKind, HttpError};
+use crate::handshake::client::Nonce;
+use crate::handshake::{
+    apply_to, ProtocolRegistry, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
+};
 
 pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffer: &mut Nonce) {
     let ValidatedRequest {
@@ -34,18 +36,20 @@ pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffe
 
     let nonce = rand::random::<[u8; 16]>();
     encode_config_slice(&nonce, base64::STANDARD, nonce_buffer);
+    let nonce_str = std::str::from_utf8(nonce_buffer).expect("Invalid UTF8");
 
     let request = format!(
         "\
-GET {path} {version:?}
-Host: {host}
-Connection: Upgrade
-Upgrade: websocket
-sec-websocket-version: 13
-sec-websocket-key: ",
+GET {path} {version:?}\r\n\
+Host: {host}\r\n\
+Connection: Upgrade\r\n\
+Upgrade: websocket\r\n\
+sec-websocket-version: 13\r\n\
+sec-websocket-key: {nonce}",
         version = version,
         path = path_and_query,
         host = host,
+        nonce = nonce_str
     );
 
     // 28 = request terminator + nonce buffer len
@@ -67,7 +71,6 @@ sec-websocket-key: ",
 
     dst.reserve(len);
     dst.put_slice(request.as_bytes());
-    dst.put_slice(nonce_buffer);
 
     if let Some((name, value)) = origin {
         dst.put_slice(b"\r\n");
@@ -194,7 +197,7 @@ where
             return Err(Error::with_cause(
                 ErrorKind::Http,
                 HttpError::InvalidHeader(header::SEC_WEBSOCKET_KEY),
-            ))
+            ));
         }
     }
 
