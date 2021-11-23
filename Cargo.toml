@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "ratchet",
+    "ratchet_core",
+    "ratchet_deflate",
+    "ratchet_ext",
+    "ratchet_fixture"
+]
