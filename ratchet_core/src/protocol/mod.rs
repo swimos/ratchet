@@ -117,9 +117,12 @@ pub enum PayloadType {
     Ping,
 }
 
+/// A message type to send.
 #[derive(Copy, Clone, Debug)]
 pub enum MessageType {
+    /// A text message.
     Text,
+    /// A binary message.
     Binary,
 }
 

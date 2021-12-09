@@ -297,12 +297,15 @@ where
     /// Constructs a new WebSocket message of `message_type` and with a payload of `buf_ref` and
     /// chunked by `fragment_size`. If the length of the buffer is less than the chunk size then
     /// only a single message is sent.
-    pub async fn write_fragmented(
+    pub async fn write_fragmented<A>(
         &mut self,
-        buf: &mut BytesMut,
+        buf: A,
         message_type: MessageType,
         fragment_size: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        A: AsRef<[u8]>,
+    {
         if self.is_closed() {
             return Err(Error::with_cause(ErrorKind::Close, CloseError));
         }
