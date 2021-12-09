@@ -56,7 +56,9 @@ pub use handshake::{
     accept, accept_with, subscribe, subscribe_with, ProtocolRegistry, TryIntoRequest,
     UpgradedClient, UpgradedServer, WebSocketResponse, WebSocketUpgrader,
 };
-pub use protocol::{CloseCode, CloseReason, Message, PayloadType, Role, WebSocketConfig};
+pub use protocol::{
+    CloseCode, CloseReason, Message, MessageType, PayloadType, Role, WebSocketConfig,
+};
 pub use ws::WebSocket;
 
 use tokio::io::{AsyncRead, AsyncWrite};
