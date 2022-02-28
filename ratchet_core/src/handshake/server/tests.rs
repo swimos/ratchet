@@ -319,3 +319,32 @@ async fn bad_extension() {
         }
     }
 }
+
+#[tokio::test]
+async fn multiple_connection_headers() {
+    let request = Request::builder()
+        .uri("/test")
+        .header(http::header::CONNECTION, "keep-alive, Upgrade")
+        .header(http::header::UPGRADE, WEBSOCKET_STR)
+        .header(http::header::SEC_WEBSOCKET_VERSION, WEBSOCKET_VERSION_STR)
+        .header(http::header::SEC_WEBSOCKET_KEY, "dGhlIHNhbXBsZSBub25jZQ==")
+        .header(http::header::HOST, "localtoast")
+        .body(())
+        .unwrap();
+
+    let response = exec_request(request).await.unwrap();
+
+    let expected = Response::builder()
+        .status(101)
+        .header(http::header::CONNECTION, "upgrade")
+        .header(http::header::UPGRADE, WEBSOCKET_STR)
+        .header(
+            http::header::SEC_WEBSOCKET_ACCEPT,
+            "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+        )
+        .version(Version::HTTP_11)
+        .body(())
+        .unwrap();
+
+    assert_response_eq(response, expected);
+}
