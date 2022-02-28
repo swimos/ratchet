@@ -168,6 +168,26 @@ where
     }
 }
 
+fn validate_header_any(
+    headers: &[httparse::Header],
+    name: HeaderName,
+    expected: &str,
+) -> Result<(), Error> {
+    validate_header(headers, name, |name, actual| {
+        if actual
+            .split(|c| c == &b' ' || c == &b',')
+            .any(|v| v.eq_ignore_ascii_case(expected.as_bytes()))
+        {
+            Ok(())
+        } else {
+            Err(Error::with_cause(
+                ErrorKind::Http,
+                HttpError::InvalidHeader(name),
+            ))
+        }
+    })
+}
+
 fn get_header(headers: &[httparse::Header], name: HeaderName) -> Result<Bytes, Error> {
     match headers
         .iter()

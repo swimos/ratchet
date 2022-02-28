@@ -16,8 +16,8 @@ use crate::ext::NegotiatedExtension;
 use crate::handshake::io::BufferedIo;
 use crate::handshake::server::HandshakeResult;
 use crate::handshake::{
-    get_header, validate_header, validate_header_value, ParseResult, METHOD_GET, UPGRADE_STR,
-    WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
+    get_header, validate_header, validate_header_any, validate_header_value, ParseResult,
+    METHOD_GET, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
 };
 use crate::handshake::{negotiate_request, TryMap};
 use crate::{Error, ErrorKind, HttpError, ProtocolRegistry};
@@ -196,7 +196,7 @@ where
     }
 
     let headers = &request.headers;
-    validate_header_value(headers, http::header::CONNECTION, UPGRADE_STR)?;
+    validate_header_any(headers, http::header::CONNECTION, UPGRADE_STR)?;
     validate_header_value(headers, http::header::UPGRADE, WEBSOCKET_STR)?;
     validate_header_value(
         headers,
