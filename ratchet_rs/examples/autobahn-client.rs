@@ -85,7 +85,7 @@ async fn run_test(case: u32) -> Result<(), Error> {
                 websocket.write(&mut buf, PayloadType::Binary).await?;
                 buf.clear();
             }
-            Message::Ping | Message::Pong => {}
+            Message::Ping(_) | Message::Pong(_) => {}
             Message::Close(_) => break Ok(()),
         }
     }

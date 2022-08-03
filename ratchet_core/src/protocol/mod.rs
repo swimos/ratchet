@@ -75,7 +75,7 @@ pub enum Message {
     /// A ping message.
     Ping(Bytes),
     /// A pong message.
-    Pong,
+    Pong(Bytes),
     /// A close message.
     Close(Option<CloseReason>),
 }
@@ -98,7 +98,7 @@ impl Message {
 
     /// Whether this is a pong message.
     pub fn is_pong(&self) -> bool {
-        matches!(self, Message::Pong)
+        matches!(self, Message::Pong(_))
     }
 
     /// Whether this is a close message.
@@ -116,6 +116,8 @@ pub enum PayloadType {
     Binary,
     /// A ping message.
     Ping,
+    /// A pong message.
+    Pong,
 }
 
 /// A message type to send.

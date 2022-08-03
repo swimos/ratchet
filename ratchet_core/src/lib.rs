@@ -28,8 +28,6 @@
 
 #[cfg(test)]
 mod test_fixture;
-#[cfg(test)]
-mod tests;
 
 mod builder;
 mod errors;
