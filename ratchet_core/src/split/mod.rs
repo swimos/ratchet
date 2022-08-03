@@ -425,6 +425,7 @@ where
                             ..
                         } = &mut *split_writer.lock().await;
 
+                        let ret = payload.clone().freeze();
                         writer
                             .write(
                                 split_writer,
@@ -435,7 +436,7 @@ where
                                 |_, _| Ok(()),
                             )
                             .await?;
-                        return Ok(Message::Ping);
+                        return Ok(Message::Ping(ret));
                     }
                     Item::Pong(payload) => {
                         let WriteHalf {

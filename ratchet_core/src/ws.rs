@@ -176,6 +176,7 @@ where
                     Item::Text => return Ok(Message::Text),
                     Item::Ping(payload) => {
                         trace!("Received a ping frame. Responding with pong");
+                        let ret = payload.clone().freeze();
                         framed
                             .write(
                                 OpCode::ControlCode(ControlCode::Pong),
@@ -184,7 +185,7 @@ where
                                 |_, _| Ok(()),
                             )
                             .await?;
-                        return Ok(Message::Ping);
+                        return Ok(Message::Ping(ret));
                     }
                     Item::Pong(payload) => {
                         if control_buffer.is_empty() {
@@ -294,7 +295,7 @@ where
                 } else {
                     self.control_buffer.clear();
                     self.control_buffer
-                        .clone_from_slice(&buf[..CONTROL_MAX_SIZE]);
+                        .extend_from_slice(&buf);
                     OpCode::ControlCode(ControlCode::Ping)
                 }
             }
