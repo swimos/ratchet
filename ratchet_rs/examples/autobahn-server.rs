@@ -59,7 +59,7 @@ async fn run(stream: TcpStream) -> Result<(), Error> {
                 websocket.write(&mut buf, PayloadType::Binary).await?;
                 buf.clear();
             }
-            Message::Ping | Message::Pong => {}
+            Message::Ping(_) | Message::Pong(_) => {}
             Message::Close(_) => return Ok(()),
         }
     }

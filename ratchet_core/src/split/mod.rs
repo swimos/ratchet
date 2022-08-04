@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bilock;
-#[cfg(test)]
-mod tests;
+use std::fmt::Debug;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
+use bitflags::_core::sync::atomic::Ordering;
+use bytes::BytesMut;
+use log::{error, trace};
+
+use bilock::{bilock, BiLock};
+use ratchet_ext::{ExtensionDecoder, ExtensionEncoder, ReunitableExtension, SplittableExtension};
 
 use crate::ext::NegotiatedExtension;
-
 use crate::framed::{
     read_next, write_close, write_fragmented, CodecFlags, FramedIoParts, FramedRead, FramedWrite,
     Item,
@@ -30,14 +36,10 @@ use crate::{
     framed, CloseError, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
     WebSocketStream,
 };
-use bilock::{bilock, BiLock};
-use bitflags::_core::sync::atomic::Ordering;
-use bytes::BytesMut;
-use log::{error, trace};
-use ratchet_ext::{ExtensionDecoder, ExtensionEncoder, ReunitableExtension, SplittableExtension};
-use std::fmt::Debug;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+
+mod bilock;
+#[cfg(test)]
+mod tests;
 
 type ReuniteFailure<S, E> = ReuniteError<
     S,
@@ -115,6 +117,7 @@ where
         &mut self,
         buf_ref: A,
         message_type: PayloadType,
+        header_flags: HeaderFlags,
         is_server: bool,
         extension: &mut E,
     ) -> Result<(), Error>
@@ -135,7 +138,7 @@ where
                     split_writer,
                     is_server,
                     OpCode::DataCode(DataCode::Text),
-                    HeaderFlags::FIN,
+                    header_flags,
                     buf,
                     |payload, header| extension_encode(extension, payload, header),
                 )
@@ -146,7 +149,7 @@ where
                     split_writer,
                     is_server,
                     OpCode::DataCode(DataCode::Binary),
-                    HeaderFlags::FIN,
+                    header_flags,
                     buf,
                     |payload, header| extension_encode(extension, payload, header),
                 )
@@ -160,14 +163,34 @@ where
                     ))
                 } else {
                     control_buffer.clear();
-                    control_buffer.clone_from_slice(&buf[..CONTROL_MAX_SIZE]);
+                    control_buffer.extend_from_slice(&buf);
 
                     writer
                         .write(
                             split_writer,
                             is_server,
                             OpCode::ControlCode(ControlCode::Ping),
-                            HeaderFlags::FIN,
+                            header_flags,
+                            buf,
+                            |payload, header| extension_encode(extension, payload, header),
+                        )
+                        .await
+                        .map_err(Into::into)
+                }
+            }
+            PayloadType::Pong => {
+                if buf.len() > CONTROL_MAX_SIZE {
+                    Err(Error::with_cause(
+                        ErrorKind::Protocol,
+                        ProtocolError::FrameOverflow,
+                    ))
+                } else {
+                    writer
+                        .write(
+                            split_writer,
+                            is_server,
+                            OpCode::ControlCode(ControlCode::Pong),
+                            header_flags,
                             buf,
                             |payload, header| extension_encode(extension, payload, header),
                         )
@@ -203,14 +226,6 @@ pub struct Sender<S, E> {
     closed: Arc<AtomicBool>,
     split_writer: BiLock<WriteHalf<S>>,
     ext_encoder: NegotiatedExtension<E>,
-}
-
-/// An owned read half of a WebSocket connection.
-#[derive(Debug)]
-pub struct Receiver<S, E> {
-    role: Role,
-    closed: Arc<AtomicBool>,
-    framed: FramedIo<S, E>,
 }
 
 impl<S, E> Sender<S, E>
@@ -267,6 +282,14 @@ where
         self.write(data.as_ref(), PayloadType::Ping).await
     }
 
+    /// Constructs a new pong WebSocket message with a payload of `data`.
+    pub async fn write_pong<I>(&mut self, data: I) -> Result<(), Error>
+    where
+        I: AsRef<[u8]>,
+    {
+        self.write(data.as_ref(), PayloadType::Pong).await
+    }
+
     /// Constructs a new WebSocket message of `message_type` and with a payload of `buf_ref.
     pub async fn write<A>(&mut self, buf: A, message_type: PayloadType) -> Result<(), Error>
     where
@@ -281,6 +304,7 @@ where
             .write(
                 buf,
                 message_type,
+                HeaderFlags::FIN,
                 self.role.is_server(),
                 &mut self.ext_encoder,
             )
@@ -361,6 +385,14 @@ where
     }
 }
 
+/// An owned read half of a WebSocket connection.
+#[derive(Debug)]
+pub struct Receiver<S, E> {
+    role: Role,
+    closed: Arc<AtomicBool>,
+    framed: FramedIo<S, E>,
+}
+
 impl<S, E> Receiver<S, E>
 where
     S: WebSocketStream,
@@ -425,6 +457,7 @@ where
                             ..
                         } = &mut *split_writer.lock().await;
 
+                        let ret = payload.clone().freeze();
                         writer
                             .write(
                                 split_writer,
@@ -435,7 +468,7 @@ where
                                 |_, _| Ok(()),
                             )
                             .await?;
-                        return Ok(Message::Ping);
+                        return Ok(Message::Ping(ret));
                     }
                     Item::Pong(payload) => {
                         let WriteHalf {
@@ -445,13 +478,14 @@ where
                             ..
                         } = &mut *split_writer.lock().await;
 
-                        if control_buffer.is_empty() {
-                            continue;
+                        return if control_buffer.is_empty() {
+                            trace!("Received an unsolicited pong frame");
+                            Ok(Message::Pong(payload.freeze()))
                         } else {
-                            return if control_buffer[..].eq(&payload[..]) {
+                            if control_buffer[..].eq(&payload[..]) {
                                 control_buffer.clear();
                                 trace!("Received pong frame");
-                                Ok(Message::Pong)
+                                Ok(Message::Pong(payload.freeze()))
                             } else {
                                 trace!("Received a pong frame with an incorrect payload. Closing the connection");
                                 closed.store(true, Ordering::Relaxed);
@@ -471,8 +505,8 @@ where
                                     ErrorKind::Protocol,
                                     CONTROL_DATA_MISMATCH.to_string(),
                                 ));
-                            };
-                        }
+                            }
+                        };
                     }
                     Item::Close(reason) => {
                         closed.store(true, Ordering::Relaxed);

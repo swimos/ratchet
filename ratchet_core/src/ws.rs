@@ -68,7 +68,7 @@ type SplitSocket<S, E> = (
 ///             websocket.write(&mut buf, PayloadType::Binary).await?;
 ///             buf.clear();
 ///         }
-///         Message::Ping | Message::Pong => {}
+///         Message::Ping(_) | Message::Pong(_) => {}
 ///         Message::Close(_) => break Ok(()),
 ///     }
 /// }
@@ -169,83 +169,82 @@ where
             return Err(Error::with_cause(ErrorKind::Close, CloseError));
         }
 
-        loop {
-            match framed.read_next(read_buffer, extension).await {
-                Ok(item) => match item {
-                    Item::Binary => return Ok(Message::Binary),
-                    Item::Text => return Ok(Message::Text),
-                    Item::Ping(payload) => {
-                        trace!("Received a ping frame. Responding with pong");
-                        framed
-                            .write(
-                                OpCode::ControlCode(ControlCode::Pong),
-                                HeaderFlags::FIN,
-                                payload,
-                                |_, _| Ok(()),
-                            )
-                            .await?;
-                        return Ok(Message::Ping);
-                    }
-                    Item::Pong(payload) => {
-                        if control_buffer.is_empty() {
-                            trace!("Received an unsolicited pong frame. Ignoring");
-                            continue;
+        return match framed.read_next(read_buffer, extension).await {
+            Ok(item) => match item {
+                Item::Binary => Ok(Message::Binary),
+                Item::Text => Ok(Message::Text),
+                Item::Ping(payload) => {
+                    trace!("Received a ping frame. Responding with pong");
+                    let ret = payload.clone().freeze();
+                    framed
+                        .write(
+                            OpCode::ControlCode(ControlCode::Pong),
+                            HeaderFlags::FIN,
+                            payload,
+                            |_, _| Ok(()),
+                        )
+                        .await?;
+                    Ok(Message::Ping(ret))
+                }
+                Item::Pong(payload) => {
+                    if control_buffer.is_empty() {
+                        trace!("Received an unsolicited pong frame");
+                        Ok(Message::Pong(payload.freeze()))
+                    } else {
+                        if control_buffer[..].eq(&payload[..]) {
+                            control_buffer.clear();
+                            trace!("Received pong frame");
+                            Ok(Message::Pong(payload.freeze()))
                         } else {
-                            return if control_buffer[..].eq(&payload[..]) {
-                                control_buffer.clear();
-                                trace!("Received pong frame");
-                                Ok(Message::Pong)
-                            } else {
-                                trace!("Received a pong frame with an incorrect payload. Closing the connection");
-                                self.closed = true;
-                                self.framed
-                                    .write_close(CloseReason {
-                                        code: CloseCode::Protocol,
-                                        description: Some(CONTROL_DATA_MISMATCH.to_string()),
-                                    })
-                                    .await?;
+                            trace!("Received a pong frame with an incorrect payload. Closing the connection");
+                            self.closed = true;
+                            self.framed
+                                .write_close(CloseReason {
+                                    code: CloseCode::Protocol,
+                                    description: Some(CONTROL_DATA_MISMATCH.to_string()),
+                                })
+                                .await?;
 
-                                return Err(Error::with_cause(
-                                    ErrorKind::Protocol,
-                                    CONTROL_DATA_MISMATCH.to_string(),
-                                ));
-                            };
+                            return Err(Error::with_cause(
+                                ErrorKind::Protocol,
+                                CONTROL_DATA_MISMATCH.to_string(),
+                            ));
                         }
                     }
-                    Item::Close(reason) => {
-                        *closed = true;
-                        return match reason {
-                            Some(reason) => {
-                                framed.write_close(reason.clone()).await?;
-                                Ok(Message::Close(Some(reason)))
-                            }
-                            None => {
-                                framed
-                                    .write(
-                                        OpCode::ControlCode(ControlCode::Close),
-                                        HeaderFlags::FIN,
-                                        &mut [],
-                                        |_, _| Ok(()),
-                                    )
-                                    .await?;
-                                Ok(Message::Close(None))
-                            }
-                        };
-                    }
-                },
-                Err(e) => {
-                    error!("WebSocket read failure: {:?}", e);
-                    self.closed = true;
-
-                    if !e.is_io() {
-                        let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
-                        self.framed.write_close(reason).await?;
-                    }
-
-                    return Err(e);
                 }
+                Item::Close(reason) => {
+                    *closed = true;
+                    match reason {
+                        Some(reason) => {
+                            framed.write_close(reason.clone()).await?;
+                            Ok(Message::Close(Some(reason)))
+                        }
+                        None => {
+                            framed
+                                .write(
+                                    OpCode::ControlCode(ControlCode::Close),
+                                    HeaderFlags::FIN,
+                                    &mut [],
+                                    |_, _| Ok(()),
+                                )
+                                .await?;
+                            Ok(Message::Close(None))
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                error!("WebSocket read failure: {:?}", e);
+                self.closed = true;
+
+                if !e.is_io() {
+                    let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
+                    self.framed.write_close(reason).await?;
+                }
+
+                Err(e)
             }
-        }
+        };
     }
 
     /// Constructs a new text WebSocket message with a payload of `data`.
@@ -272,6 +271,14 @@ where
         self.write(data.as_ref(), PayloadType::Ping).await
     }
 
+    /// Constructs a new pong WebSocket message with a payload of `data`.
+    pub async fn write_pong<I>(&mut self, data: I) -> Result<(), Error>
+    where
+        I: AsRef<[u8]>,
+    {
+        self.write(data.as_ref(), PayloadType::Pong).await
+    }
+
     /// Constructs a new WebSocket message of `message_type` and with a payload of `buf.
     pub async fn write<A>(&mut self, buf: A, message_type: PayloadType) -> Result<(), Error>
     where
@@ -293,9 +300,18 @@ where
                     ));
                 } else {
                     self.control_buffer.clear();
-                    self.control_buffer
-                        .clone_from_slice(&buf[..CONTROL_MAX_SIZE]);
+                    self.control_buffer.extend_from_slice(&buf);
                     OpCode::ControlCode(ControlCode::Ping)
+                }
+            }
+            PayloadType::Pong => {
+                if buf.len() > CONTROL_MAX_SIZE {
+                    return Err(Error::with_cause(
+                        ErrorKind::Protocol,
+                        ProtocolError::FrameOverflow,
+                    ));
+                } else {
+                    OpCode::ControlCode(ControlCode::Pong)
                 }
             }
         };
@@ -401,4 +417,222 @@ where
     extension
         .encode(buf, header)
         .map_err(|e| Error::with_cause(ErrorKind::Extension, e))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::framed::Item;
+    use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
+    use crate::ws::extension_encode;
+    use crate::{
+        Error, Message, NegotiatedExtension, NoExt, Role, WebSocket, WebSocketConfig,
+        WebSocketStream,
+    };
+    use bytes::{Bytes, BytesMut};
+    use ratchet_ext::Extension;
+    use tokio::io::{duplex, DuplexStream};
+
+    impl<S, E> WebSocket<S, E>
+    where
+        S: WebSocketStream,
+        E: Extension,
+    {
+        pub async fn write_frame<A>(
+            &mut self,
+            buf: A,
+            opcode: OpCode,
+            fin: bool,
+        ) -> Result<(), Error>
+        where
+            A: AsRef<[u8]>,
+        {
+            let WebSocket { framed, .. } = self;
+            let encoder = &mut self.extension;
+
+            framed
+                .write(
+                    opcode,
+                    if fin {
+                        HeaderFlags::FIN
+                    } else {
+                        HeaderFlags::empty()
+                    },
+                    buf,
+                    |payload, header| extension_encode(encoder, payload, header),
+                )
+                .await
+        }
+
+        pub async fn read_frame(&mut self, read_buffer: &mut BytesMut) -> Result<Item, Error> {
+            let WebSocket {
+                framed, extension, ..
+            } = self;
+
+            framed.read_next(read_buffer, extension).await
+        }
+    }
+
+    fn fixture() -> (
+        WebSocket<DuplexStream, NoExt>,
+        WebSocket<DuplexStream, NoExt>,
+    ) {
+        let (server, client) = duplex(512);
+        let config = WebSocketConfig::default();
+
+        let server = WebSocket::from_upgraded(
+            config,
+            server,
+            NegotiatedExtension::from(NoExt),
+            BytesMut::new(),
+            Role::Server,
+        );
+        let client = WebSocket::from_upgraded(
+            config,
+            client,
+            NegotiatedExtension::from(NoExt),
+            BytesMut::new(),
+            Role::Client,
+        );
+
+        (client, server)
+    }
+
+    #[tokio::test]
+    async fn ping_pong() {
+        let (mut client, mut server) = fixture();
+        let payload = "ping!";
+        client.write_ping(payload).await.expect("Send failed.");
+
+        let mut read_buf = BytesMut::new();
+        let message = server.read(&mut read_buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Ping(Bytes::from("ping!")));
+        assert!(read_buf.is_empty());
+
+        let message = client.read(&mut read_buf).await.expect("Read failure");
+        assert_eq!(message, Message::Pong(Bytes::from("ping!")));
+        assert!(read_buf.is_empty());
+    }
+
+    #[tokio::test]
+    async fn reads_unsolicited_pong() {
+        let (mut client, mut server) = fixture();
+        let payload = "pong!";
+
+        let mut read_buf = BytesMut::new();
+        server.write_pong(payload).await.expect("Write failure");
+
+        let message = client.read(&mut read_buf).await.expect("Read failure");
+        assert_eq!(message, Message::Pong(Bytes::from(payload)));
+        assert!(read_buf.is_empty());
+    }
+
+    #[tokio::test]
+    async fn empty_control_frame() {
+        let (mut client, mut server) = fixture();
+
+        let mut read_buf = BytesMut::new();
+        server.write_pong(&[]).await.expect("Write failure");
+
+        let message = client.read(&mut read_buf).await.expect("Read failure");
+        assert_eq!(message, Message::Pong(Bytes::new()));
+        assert!(read_buf.is_empty());
+    }
+
+    #[tokio::test]
+    async fn interleaved_control_frames() {
+        let (mut client, mut server) = fixture();
+        let control_data = "data";
+
+        client
+            .write_frame("123", OpCode::DataCode(DataCode::Text), false)
+            .await
+            .expect("Write failure");
+        client
+            .write_frame("456", OpCode::DataCode(DataCode::Continuation), false)
+            .await
+            .expect("Write failure");
+
+        client
+            .write_frame(control_data, OpCode::ControlCode(ControlCode::Ping), true)
+            .await
+            .expect("Write failure");
+
+        client
+            .write_frame(control_data, OpCode::ControlCode(ControlCode::Pong), true)
+            .await
+            .expect("Write failure");
+
+        client
+            .write_frame("789", OpCode::DataCode(DataCode::Continuation), true)
+            .await
+            .expect("Write failure");
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Ping(Bytes::from(control_data)));
+        assert!(!buf.is_empty());
+
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Pong(Bytes::from(control_data)));
+        assert!(!buf.is_empty());
+
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Text);
+        assert!(!buf.is_empty());
+
+        assert_eq!(
+            String::from_utf8(buf.to_vec()).expect("Malformatted data received"),
+            "123456789"
+        );
+    }
+
+    #[tokio::test]
+    async fn bad_ping_pong_response() {
+        let (mut client, mut server) = fixture();
+
+        client.write_ping("ping1").await.expect("Write failure");
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Ping(Bytes::from("ping1")));
+        assert!(buf.is_empty());
+
+        // this needs to be a raw frame read as we don't want to change the contents of the client's
+        // control buffer but we still want to make sure that the server responds correctly.
+        let item = client.read_frame(&mut buf).await.expect("Read failure");
+        assert_eq!(item, Item::Pong(BytesMut::from("ping1")));
+        assert!(buf.is_empty());
+
+        server
+            .write_frame("bad data", OpCode::ControlCode(ControlCode::Pong), true)
+            .await
+            .expect("Write failure");
+
+        let error = client.read(&mut buf).await.unwrap_err();
+        assert!(error.is_protocol());
+    }
+
+    #[tokio::test]
+    async fn large_control_frames() {
+        {
+            let (mut client, _server) = fixture();
+            let error = client.write_ping(&[13; 256]).await.unwrap_err();
+            assert!(error.is_protocol());
+        }
+        {
+            let (mut client, mut server) = fixture();
+            server
+                .write_frame(&[13; 256], OpCode::ControlCode(ControlCode::Pong), true)
+                .await
+                .expect("Write failure");
+
+            let error = client.read(&mut BytesMut::new()).await.unwrap_err();
+            assert!(error.is_protocol());
+        }
+    }
 }

@@ -220,7 +220,7 @@ impl From<http::Error> for Error {
 
 impl From<ProtocolError> for Error {
     fn from(e: ProtocolError) -> Self {
-        Error::with_cause(ErrorKind::Http, e)
+        Error::with_cause(ErrorKind::Protocol, e)
     }
 }
 

@@ -23,6 +23,7 @@ pub use mask::apply_mask;
 
 use derive_more::Display;
 use std::convert::TryFrom;
+use bytes::Bytes;
 use thiserror::Error;
 
 bitflags::bitflags! {
@@ -72,9 +73,9 @@ pub enum Message {
     /// A binary message.
     Binary,
     /// A ping message.
-    Ping,
+    Ping(Bytes),
     /// A pong message.
-    Pong,
+    Pong(Bytes),
     /// A close message.
     Close(Option<CloseReason>),
 }
@@ -92,12 +93,12 @@ impl Message {
 
     /// Whether this is a ping message.
     pub fn is_ping(&self) -> bool {
-        matches!(self, Message::Ping)
+        matches!(self, Message::Ping(_))
     }
 
     /// Whether this is a pong message.
     pub fn is_pong(&self) -> bool {
-        matches!(self, Message::Pong)
+        matches!(self, Message::Pong(_))
     }
 
     /// Whether this is a close message.
@@ -115,6 +116,8 @@ pub enum PayloadType {
     Binary,
     /// A ping message.
     Ping,
+    /// A pong message.
+    Pong,
 }
 
 /// A message type to send.
