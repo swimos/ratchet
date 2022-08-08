@@ -14,7 +14,7 @@
 
 pub mod duplex {
     use bytes::BytesMut;
-    use ratchet::{Extension, NegotiatedExtension, Role, WebSocketConfig};
+    use ratchet::{Extension, Role, WebSocketConfig};
     use tokio::io::DuplexStream;
 
     pub type MockWebSocket<E> = ratchet::WebSocket<DuplexStream, E>;
@@ -26,7 +26,7 @@ pub mod duplex {
         ratchet::WebSocket::from_upgraded(
             WebSocketConfig::default(),
             stream,
-            NegotiatedExtension::from(Some(ext)),
+            ext,
             BytesMut::new(),
             role,
         )
@@ -53,7 +53,7 @@ pub mod duplex {
             ratchet::WebSocket::from_upgraded(
                 WebSocketConfig::default(),
                 tx,
-                NegotiatedExtension::from(Some(ext)),
+                ext,
                 BytesMut::new(),
                 role,
             ),

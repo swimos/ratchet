@@ -121,14 +121,18 @@ where
     /// `read_buffer` - The read buffer which will be used for the session. This **may** contain any
     /// unread data received after performing the handshake that was not required.
     /// `role` - The role that this WebSocket will take.
-    pub fn from_upgraded(
+    pub fn from_upgraded<I>(
         config: WebSocketConfig,
         stream: S,
-        extension: NegotiatedExtension<E>,
+        extension: I,
         read_buffer: BytesMut,
         role: Role,
-    ) -> WebSocket<S, E> {
+    ) -> WebSocket<S, E>
+    where
+        I: Into<NegotiatedExtension<E>>,
+    {
         let WebSocketConfig { max_message_size } = config;
+        let extension = extension.into();
         WebSocket {
             framed: FramedIo::new(
                 stream,
@@ -455,8 +459,8 @@ mod tests {
     use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
     use crate::ws::extension_encode;
     use crate::{
-        CloseCode, CloseError, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role,
-        WebSocket, WebSocketConfig, WebSocketStream,
+        CloseCode, CloseError, CloseReason, Error, Message, NoExt, Role, WebSocket,
+        WebSocketConfig, WebSocketStream,
     };
     use bytes::{Bytes, BytesMut};
     use ratchet_ext::Extension;
@@ -509,20 +513,8 @@ mod tests {
         let (server, client) = duplex(512);
         let config = WebSocketConfig::default();
 
-        let server = WebSocket::from_upgraded(
-            config,
-            server,
-            NegotiatedExtension::from(NoExt),
-            BytesMut::new(),
-            Role::Server,
-        );
-        let client = WebSocket::from_upgraded(
-            config,
-            client,
-            NegotiatedExtension::from(NoExt),
-            BytesMut::new(),
-            Role::Client,
-        );
+        let server = WebSocket::from_upgraded(config, server, NoExt, BytesMut::new(), Role::Server);
+        let client = WebSocket::from_upgraded(config, client, NoExt, BytesMut::new(), Role::Client);
 
         (client, server)
     }
