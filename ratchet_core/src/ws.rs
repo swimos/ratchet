@@ -16,10 +16,10 @@ use crate::errors::{CloseError, Error, ErrorKind, ProtocolError};
 use crate::ext::NegotiatedExtension;
 use crate::framed::{FramedIo, Item};
 use crate::protocol::{
-    CloseCode, CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode,
-    PayloadType, Role,
+    CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
+    Role,
 };
-use crate::{WebSocketConfig, WebSocketStream};
+use crate::{CloseCode, WebSocketConfig, WebSocketStream};
 use bytes::BytesMut;
 use log::{error, trace};
 use ratchet_ext::{Extension, ExtensionEncoder, FrameHeader as ExtFrameHeader};
@@ -78,7 +78,18 @@ pub struct WebSocket<S, E> {
     framed: FramedIo<S>,
     control_buffer: BytesMut,
     extension: NegotiatedExtension<E>,
-    closed: bool,
+    close_state: CloseState,
+}
+
+/// Denotes the current state of a WebSocket session.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum CloseState {
+    /// The session is active.
+    NotClosed,
+    /// Either a user or peer requested closure of the session has been requested.
+    Closing,
+    /// The WebSocket session is closed.
+    Closed,
 }
 
 impl<S, E> WebSocket<S, E>
@@ -91,13 +102,13 @@ where
         framed: FramedIo<S>,
         control_buffer: BytesMut,
         extension: NegotiatedExtension<E>,
-        closed: bool,
+        close_state: CloseState,
     ) -> WebSocket<S, E> {
         WebSocket {
             framed,
             control_buffer,
             extension,
-            closed,
+            close_state,
         }
     }
 
@@ -116,6 +127,7 @@ where
         extension: NegotiatedExtension<E>,
         read_buffer: BytesMut,
         role: Role,
+        close_state: CloseState,
     ) -> WebSocket<S, E> {
         let WebSocketConfig { max_message_size } = config;
         WebSocket {
@@ -128,7 +140,7 @@ where
             ),
             extension,
             control_buffer: BytesMut::with_capacity(CONTROL_MAX_SIZE),
-            closed: false,
+            close_state,
         }
     }
 
@@ -145,10 +157,14 @@ where
     /// received or the error that was produced.
     ///
     /// # Errors
-    /// If an error is produced during a read operation the contents of `read_buffer` must be
-    /// considered to be dirty.
+    /// In the event that an error is produced, an attempt is made to cleanly close the connection
+    /// by sending a close frame to the peer. If this attempt fails, then the connection is
+    /// abruptly closed and the cause of the error is returned.
     ///
-    /// # Note
+    /// In the event that an error is produced the contents of `read_buffer` must be considered to
+    /// be dirty.
+    ///
+    /// # Control frames
     /// Ratchet transparently handles ping messages received from the peer by returning a pong frame
     /// and this function will return `Message::Pong` if one has been received. As per [RFC6455](https://datatracker.ietf.org/doc/html/rfc6455)
     /// these may be interleaved between data frames. In the event of one being received while
@@ -158,14 +174,14 @@ where
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
         let WebSocket {
             framed,
-            closed,
+            close_state,
             control_buffer,
             extension,
             ..
         } = self;
 
-        if *closed {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
 
         return match framed.read_next(read_buffer, extension).await {
@@ -195,37 +211,11 @@ where
                         Ok(Message::Pong(payload.freeze()))
                     }
                 }
-                Item::Close(reason) => {
-                    *closed = true;
-                    match reason {
-                        Some(reason) => {
-                            framed.write_close(reason.clone()).await?;
-                            Ok(Message::Close(Some(reason)))
-                        }
-                        None => {
-                            framed
-                                .write(
-                                    OpCode::ControlCode(ControlCode::Close),
-                                    HeaderFlags::FIN,
-                                    &mut [],
-                                    |_, _| Ok(()),
-                                )
-                                .await?;
-                            Ok(Message::Close(None))
-                        }
-                    }
-                }
+                Item::Close(reason) => close(close_state, framed, reason).await,
             },
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
-                self.closed = true;
-
-                if !e.is_io() {
-                    let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
-                    self.framed.write_close(reason).await?;
-                }
-
-                Err(e)
+                close(close_state, framed, None).await
             }
         };
     }
@@ -267,10 +257,11 @@ where
     where
         A: AsRef<[u8]>,
     {
-        let buf = buf.as_ref();
-        if self.closed {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
+
+        let buf = buf.as_ref();
 
         let op_code = match message_type {
             PayloadType::Text => OpCode::DataCode(DataCode::Text),
@@ -300,32 +291,20 @@ where
         };
 
         let encoder = &mut self.extension;
-        match self
-            .framed
+        self.framed
             .write(op_code, HeaderFlags::FIN, buf, |payload, header| {
                 extension_encode(encoder, payload, header)
             })
             .await
-        {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                self.closed = true;
-                Err(e)
-            }
+    }
+
+    /// Close this WebSocket with the reason provided.
+    pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
-    }
 
-    /// Close this WebSocket with the reason provided.
-    pub async fn close(&mut self, reason: Option<String>) -> Result<(), Error> {
-        self.closed = true;
-        self.framed
-            .write_close(CloseReason::new(CloseCode::Normal, reason))
-            .await
-    }
-
-    /// Close this WebSocket with the reason provided.
-    pub async fn close_with(&mut self, reason: CloseReason) -> Result<(), Error> {
-        self.closed = true;
+        self.close_state = CloseState::Closing;
         self.framed.write_close(reason).await
     }
 
@@ -341,9 +320,10 @@ where
     where
         A: AsRef<[u8]>,
     {
-        if self.closed {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
+
         let encoder = &mut self.extension;
         self.framed
             .write_fragmented(buf, message_type, fragment_size, |payload, header| {
@@ -354,7 +334,12 @@ where
 
     /// Returns whether this WebSocket is closed.
     pub fn is_closed(&self) -> bool {
-        self.closed
+        self.close_state == CloseState::Closed
+    }
+
+    /// Returns whether this WebSocket is closing or closed.
+    pub fn is_active(&self) -> bool {
+        !matches!(self.close_state, CloseState::Closed | CloseState::Closing)
     }
 
     /// Attempt to split the `WebSocket` into its sender and receiver halves.
@@ -376,7 +361,7 @@ where
         E: SplittableExtension,
     {
         if self.is_closed() {
-            Err(Error::with_cause(ErrorKind::Close, CloseError))
+            Err(Error::with_cause(ErrorKind::Close, CloseError::Closed))
         } else {
             let WebSocket {
                 framed,
@@ -386,6 +371,66 @@ where
             } = self;
             Ok(split(framed, control_buffer, extension))
         }
+    }
+}
+
+async fn close<S>(
+    close_state: &mut CloseState,
+    framed: &mut FramedIo<S>,
+    reason: Option<CloseReason>,
+) -> Result<Message, Error>
+where
+    S: WebSocketStream,
+{
+    let server = framed.is_server();
+    match *close_state {
+        CloseState::NotClosed => {
+            let mut code = match &reason {
+                Some(reason) => u16::from(reason.code).to_ne_bytes(),
+                None => [0; 2],
+            };
+
+            // we don't want to immediately await the echoed close frame as the peer may elect to
+            // drain any pending messages **before** echoing the close frame
+
+            let write_result = framed
+                .write(
+                    OpCode::ControlCode(ControlCode::Close),
+                    HeaderFlags::FIN,
+                    &mut code,
+                    |_, _| Ok(()),
+                )
+                .await;
+            match write_result {
+                Ok(()) => {
+                    *close_state = CloseState::Closing;
+                    Ok(Message::Close(reason))
+                }
+                Err(_) => {
+                    if server {
+                        // 7.1.1: the TCP stream should be closed first by the server
+                        //
+                        // We aren't interested in any IO errors produced here as the peer *may* have
+                        // already closed the TCP stream.
+                        framed.close().await;
+                    }
+                    *close_state = CloseState::Closed;
+                    Ok(Message::Close(reason))
+                }
+            }
+        }
+        CloseState::Closing => {
+            *close_state = CloseState::Closed;
+            if server {
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                framed.close().await;
+            }
+            Err(Error::with_cause(ErrorKind::Close, CloseError::Nominal))
+        }
+        CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseError::Closed)),
     }
 }
 
@@ -406,10 +451,10 @@ where
 mod tests {
     use crate::framed::Item;
     use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
-    use crate::ws::extension_encode;
+    use crate::ws::{extension_encode, CloseState};
     use crate::{
-        Error, Message, NegotiatedExtension, NoExt, Role, WebSocket, WebSocketConfig,
-        WebSocketStream,
+        CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role, WebSocket,
+        WebSocketConfig, WebSocketStream,
     };
     use bytes::{Bytes, BytesMut};
     use ratchet_ext::Extension;
@@ -468,6 +513,7 @@ mod tests {
             NegotiatedExtension::from(NoExt),
             BytesMut::new(),
             Role::Server,
+            CloseState::NotClosed,
         );
         let client = WebSocket::from_upgraded(
             config,
@@ -475,6 +521,7 @@ mod tests {
             NegotiatedExtension::from(NoExt),
             BytesMut::new(),
             Role::Client,
+            CloseState::NotClosed,
         );
 
         (client, server)
@@ -590,5 +637,22 @@ mod tests {
             let error = client.read(&mut BytesMut::new()).await.unwrap_err();
             assert!(error.is_protocol());
         }
+    }
+
+    #[tokio::test]
+    async fn closes_cleanly() {
+        let (mut client, mut server) = fixture();
+
+        let reason = CloseReason::new(CloseCode::GoingAway, Some("bye".to_string()));
+
+        client.close(reason.clone()).await.expect("Close failure");
+
+        drop(client);
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Close(Some(reason)));
+        assert!(buf.is_empty());
     }
 }

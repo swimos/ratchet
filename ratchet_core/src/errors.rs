@@ -255,9 +255,18 @@ impl From<InvalidHeaderValue> for Error {
 }
 
 #[derive(Clone, Copy, Error, Debug, PartialEq)]
-/// The channel is already closed
+/// The channel is closed
 #[error("The channel is already closed")]
-pub struct CloseError;
+pub enum CloseError {
+    /// The channel closed nominally. This is **not** an error and instead indicates a clean closure
+    /// off the channel.
+    #[error("The channel closed as expected")]
+    Nominal,
+    /// This is only produced when a user attempts to reuse a closed channel and instead indicates a
+    /// bug in your code.
+    #[error("Attempted to use a closed channel")]
+    Closed,
+}
 
 /// WebSocket protocol errors.
 #[derive(Copy, Clone, Debug, PartialEq, Error)]

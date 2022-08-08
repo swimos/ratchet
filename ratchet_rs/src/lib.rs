@@ -21,6 +21,16 @@
 //! - Per-message deflate with [ratchet_deflate](../ratchet_deflate) or enable with the `deflate`
 //! feature.
 //! - Split WebSocket with the `split` feature.
+//!
+//! # Error handling
+//! Ratchet is strict over its implementation of The WebSocket protocol and as such any errors in
+//! a session may result in the closure of the session when performing a send or receive operation;
+//! it is possible to perform a liveliness check on a WebSocket by invoking the `is_closed` function.
+//! If an error is encountered, then an attempt to close the session cleanly is performed and an
+//! error is returned so it is clear that the connection may have been closed.
+//!
+//! Possible errors that may be encountered during an upgraded session are protocol violations by
+//! the peer or an IO error.
 
 #![deny(
     missing_docs,
