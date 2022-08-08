@@ -283,7 +283,7 @@ where
                     ));
                 } else {
                     self.control_buffer.clear();
-                    self.control_buffer.extend_from_slice(&buf);
+                    self.control_buffer.extend_from_slice(buf);
                     OpCode::ControlCode(ControlCode::Ping)
                 }
             }
