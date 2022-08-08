@@ -13,12 +13,13 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU8;
 use std::sync::Arc;
 
 use bitflags::_core::sync::atomic::Ordering;
 use bytes::BytesMut;
 use log::{error, trace};
+use tokio::io::AsyncWriteExt;
 
 use bilock::{bilock, BiLock};
 use ratchet_ext::{ExtensionDecoder, ExtensionEncoder, ReunitableExtension, SplittableExtension};
@@ -28,9 +29,7 @@ use crate::framed::{
     read_next, write_close, write_fragmented, CodecFlags, FramedIoParts, FramedRead, FramedWrite,
     Item,
 };
-use crate::protocol::{
-    CloseCode, CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode,
-};
+use crate::protocol::{CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode};
 use crate::ws::{extension_encode, CloseState, CONTROL_MAX_SIZE};
 use crate::{
     framed, CloseError, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
@@ -46,6 +45,10 @@ type ReuniteFailure<S, E> = ReuniteError<
     <E as SplittableExtension>::SplitEncoder,
     <E as SplittableExtension>::SplitDecoder,
 >;
+
+const STATE_OPEN: u8 = 0;
+const STATE_CLOSING: u8 = 1;
+const STATE_CLOSED: u8 = 2;
 
 /// Splits a WebSocket's parts into send and receive halves. Internally, two BiLocks are used: one
 /// over the IO and one on the write half to send any responses to any control frames that are
@@ -71,7 +74,7 @@ where
         max_message_size,
     } = framed.into_parts();
 
-    let closed = Arc::new(AtomicBool::new(false));
+    let close_state = Arc::new(AtomicU8::new(STATE_OPEN));
     let (read_half, write_half) = bilock(io);
     let (sender_writer, reader_writer) = bilock(WriteHalf {
         control_buffer,
@@ -89,13 +92,13 @@ where
 
     let sender = Sender {
         role,
-        closed: closed.clone(),
+        close_state: close_state.clone(),
         split_writer: sender_writer,
         ext_encoder,
     };
     let receiver = Receiver {
         role,
-        closed,
+        close_state,
         framed: FramedIo {
             flags,
             max_message_size,
@@ -200,6 +203,10 @@ where
             }
         }
     }
+
+    async fn close(&mut self) {
+        let _r = self.split_writer.shutdown().await;
+    }
 }
 
 #[derive(Debug)]
@@ -223,7 +230,7 @@ struct FramedIo<S, E> {
 #[derive(Debug)]
 pub struct Sender<S, E> {
     role: Role,
-    closed: Arc<AtomicBool>,
+    close_state: Arc<AtomicU8>,
     split_writer: BiLock<WriteHalf<S>>,
     ext_encoder: NegotiatedExtension<E>,
 }
@@ -255,7 +262,15 @@ where
 
     /// Returns whether this WebSocket is closed.
     pub fn is_closed(&self) -> bool {
-        self.closed.load(Ordering::Relaxed)
+        self.close_state.load(Ordering::Relaxed) == STATE_CLOSED
+    }
+
+    /// Returns whether this WebSocket is closing or closed.
+    pub fn is_active(&self) -> bool {
+        !matches!(
+            self.close_state.load(Ordering::Relaxed),
+            STATE_CLOSED | STATE_CLOSING
+        )
     }
 
     /// Constructs a new text WebSocket message with a payload of `data`.
@@ -295,12 +310,12 @@ where
     where
         A: AsRef<[u8]>,
     {
-        if self.is_closed() {
+        if !self.is_active() {
             return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
 
         let writer = &mut *self.split_writer.lock().await;
-        match writer
+        writer
             .write(
                 buf,
                 message_type,
@@ -309,18 +324,11 @@ where
                 &mut self.ext_encoder,
             )
             .await
-        {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                self.closed.store(true, Ordering::Relaxed);
-                Err(e)
-            }
-        }
     }
 
-    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf_ref` and
-    /// chunked by `fragment_size`. If the length of the buffer is less than the chunk size then
-    /// only a single message is sent.
+    /// Sends a new WebSocket message of `message_type` and with a payload of `buf_ref` and chunked
+    /// by `fragment_size`. If the length of the buffer is less than the chunk size then only a
+    /// single message is sent.
     pub async fn write_fragmented<A>(
         &mut self,
         buf: A,
@@ -339,7 +347,7 @@ where
             ..
         } = &mut *self.split_writer.lock().await;
         let ext_encoder = &mut self.ext_encoder;
-        let write_result = write_fragmented(
+        write_fragmented(
             split_writer,
             writer,
             buf,
@@ -348,34 +356,17 @@ where
             self.role.is_server(),
             |payload, header| extension_encode(ext_encoder, payload, header),
         )
-        .await;
-
-        if write_result.is_err() {
-            self.closed.store(true, Ordering::Relaxed);
-        }
-        write_result
-    }
-
-    /// Close this Sender with the reason provided.    
-    pub async fn close(&mut self, reason: Option<String>) -> Result<(), Error> {
-        self.closed.store(true, Ordering::Relaxed);
-        let WriteHalf {
-            split_writer,
-            writer,
-            ..
-        } = &mut *self.split_writer.lock().await;
-        write_close(
-            split_writer,
-            writer,
-            CloseReason::new(CloseCode::Normal, reason),
-            self.role.is_server(),
-        )
         .await
     }
 
-    /// Close this WebSocket with the reason provided.
-    pub async fn close_with(&mut self, reason: CloseReason) -> Result<(), Error> {
-        self.closed.store(true, Ordering::Relaxed);
+    /// Close this Sender with the reason provided.    
+    pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+        }
+
+        self.close_state.store(STATE_CLOSING, Ordering::Release);
+
         let WriteHalf {
             split_writer,
             writer,
@@ -389,7 +380,7 @@ where
 #[derive(Debug)]
 pub struct Receiver<S, E> {
     role: Role,
-    closed: Arc<AtomicBool>,
+    close_state: Arc<AtomicU8>,
     framed: FramedIo<S, E>,
 }
 
@@ -418,9 +409,13 @@ where
     /// will contain the data received up to that point. The callee must ensure that the contents
     /// of `read_buffer` are **not** then modified before calling `read` again.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+        }
+
         let Receiver {
             role,
-            closed,
+            close_state,
             framed,
             ..
         } = self;
@@ -434,145 +429,176 @@ where
         } = framed;
         let is_server = role.is_server();
 
-        loop {
-            match read_next(
-                read_half,
-                reader,
-                flags,
-                *max_message_size,
-                read_buffer,
-                ext_decoder,
-            )
-            .await
-            {
-                Ok(item) => match item {
-                    Item::Binary => return Ok(Message::Binary),
-                    Item::Text => return Ok(Message::Text),
-                    Item::Ping(payload) => {
-                        trace!("Received a ping frame. Responding with pong");
+        return match read_next(
+            read_half,
+            reader,
+            flags,
+            *max_message_size,
+            read_buffer,
+            ext_decoder,
+        )
+        .await
+        {
+            Ok(item) => match item {
+                Item::Binary => Ok(Message::Binary),
+                Item::Text => Ok(Message::Text),
+                Item::Ping(payload) => {
+                    trace!("Received a ping frame. Responding with pong");
 
-                        let WriteHalf {
+                    let WriteHalf {
+                        split_writer,
+                        writer,
+                        ..
+                    } = &mut *split_writer.lock().await;
+
+                    let ret = payload.clone().freeze();
+                    writer
+                        .write(
                             split_writer,
-                            writer,
-                            ..
-                        } = &mut *split_writer.lock().await;
+                            is_server,
+                            OpCode::ControlCode(ControlCode::Pong),
+                            HeaderFlags::FIN,
+                            payload,
+                            |_, _| Ok(()),
+                        )
+                        .await?;
+                    Ok(Message::Ping(ret))
+                }
+                Item::Pong(payload) => {
+                    let WriteHalf { control_buffer, .. } = &mut *split_writer.lock().await;
 
-                        let ret = payload.clone().freeze();
-                        writer
-                            .write(
-                                split_writer,
-                                is_server,
-                                OpCode::ControlCode(ControlCode::Pong),
-                                HeaderFlags::FIN,
-                                payload,
-                                |_, _| Ok(()),
-                            )
-                            .await?;
-                        return Ok(Message::Ping(ret));
+                    if control_buffer.is_empty() {
+                        trace!("Received an unsolicited pong frame");
+                        Ok(Message::Pong(payload.freeze()))
+                    } else {
+                        control_buffer.clear();
+                        trace!("Received pong frame");
+                        Ok(Message::Pong(payload.freeze()))
                     }
-                    Item::Pong(payload) => {
-                        let WriteHalf { control_buffer, .. } = &mut *split_writer.lock().await;
+                }
+                Item::Close(reason) => {
+                    close(
+                        close_state,
+                        &mut *split_writer.lock().await,
+                        role.is_server(),
+                        reason,
+                        None,
+                    )
+                    .await
+                }
+            },
+            Err(e) => {
+                error!("WebSocket read failure: {:?}", e);
+                close(
+                    close_state,
+                    &mut *split_writer.lock().await,
+                    role.is_server(),
+                    None,
+                    Some(e),
+                )
+                .await
+            }
+        };
+    }
 
-                        return if control_buffer.is_empty() {
-                            trace!("Received an unsolicited pong frame");
-                            Ok(Message::Pong(payload.freeze()))
-                        } else {
-                            control_buffer.clear();
-                            trace!("Received pong frame");
-                            Ok(Message::Pong(payload.freeze()))
-                        };
+    /// Close this Sender with the reason provided.    
+    pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+        }
+
+        self.close_state.store(STATE_CLOSING, Ordering::Release);
+
+        let WriteHalf {
+            split_writer,
+            writer,
+            ..
+        } = &mut *self.framed.split_writer.lock().await;
+        write_close(split_writer, writer, reason, self.role.is_server()).await
+    }
+
+    /// Returns whether this WebSocket is closed.
+    pub fn is_closed(&self) -> bool {
+        self.close_state.load(Ordering::Relaxed) == STATE_CLOSED
+    }
+
+    /// Returns whether this WebSocket is closing or closed.
+    pub fn is_active(&self) -> bool {
+        !matches!(
+            self.close_state.load(Ordering::Relaxed),
+            STATE_CLOSED | STATE_CLOSING
+        )
+    }
+}
+
+async fn close<S>(
+    close_state: &AtomicU8,
+    framed: &mut WriteHalf<S>,
+    is_server: bool,
+    reason: Option<CloseReason>,
+    ret: Option<Error>,
+) -> Result<Message, Error>
+where
+    S: WebSocketStream,
+{
+    let WriteHalf {
+        split_writer,
+        writer,
+        ..
+    } = framed;
+
+    match close_state.load(Ordering::Acquire) {
+        STATE_OPEN => {
+            let mut code = match &reason {
+                Some(reason) => u16::from(reason.code).to_be_bytes(),
+                None => [0; 2],
+            };
+
+            // we don't want to immediately await the echoed close frame as the peer may elect to
+            // drain any pending messages **before** echoing the close frame
+
+            let write_result = writer
+                .write(
+                    split_writer,
+                    is_server,
+                    OpCode::ControlCode(ControlCode::Close),
+                    HeaderFlags::FIN,
+                    &mut code,
+                    |_, _| Ok(()),
+                )
+                .await;
+            match write_result {
+                Ok(()) => close_state.store(STATE_CLOSING, Ordering::Release),
+                Err(_) => {
+                    if is_server {
+                        // 7.1.1: the TCP stream should be closed first by the server
+                        //
+                        // We aren't interested in any IO errors produced here as the peer *may* have
+                        // already closed the TCP stream.
+                        framed.close().await;
                     }
-                    Item::Close(reason) => {
-                        closed.store(true, Ordering::Relaxed);
-                        let WriteHalf {
-                            split_writer,
-                            writer,
-                            ..
-                        } = &mut *split_writer.lock().await;
-
-                        return match reason {
-                            Some(reason) => {
-                                write_close(split_writer, writer, reason.clone(), is_server)
-                                    .await?;
-                                Ok(Message::Close(Some(reason)))
-                            }
-                            None => {
-                                writer
-                                    .write(
-                                        split_writer,
-                                        is_server,
-                                        OpCode::ControlCode(ControlCode::Close),
-                                        HeaderFlags::FIN,
-                                        &mut [],
-                                        |_, _| Ok(()),
-                                    )
-                                    .await?;
-                                Ok(Message::Close(None))
-                            }
-                        };
-                    }
-                },
-                Err(e) => {
-                    error!("WebSocket read failure: {:?}", e);
-                    closed.store(true, Ordering::Relaxed);
-
-                    if !e.is_io() {
-                        let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
-                        let WriteHalf {
-                            split_writer,
-                            writer,
-                            ..
-                        } = &mut *split_writer.lock().await;
-                        write_close(split_writer, writer, reason, is_server).await?;
-                    }
-
-                    return Err(e);
+                    close_state.store(STATE_CLOSED, Ordering::Release);
                 }
             }
+            match ret {
+                Some(err) => Err(err),
+                None => Ok(Message::Close(reason)),
+            }
         }
-    }
+        STATE_CLOSING => {
+            close_state.store(STATE_CLOSED, Ordering::Release);
+            if is_server {
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                let _r = framed.close().await;
+            }
 
-    /// Close this receiver with the reason provided.
-    pub async fn close(&mut self, reason: Option<String>) -> Result<(), Error> {
-        self.closed.store(true, Ordering::Relaxed);
-        let WriteHalf {
-            split_writer,
-            writer,
-            ..
-        } = &mut *self.framed.split_writer.lock().await;
-        let write_result = write_close(
-            split_writer,
-            writer,
-            CloseReason::new(CloseCode::Normal, reason),
-            self.role.is_server(),
-        )
-        .await;
-
-        if write_result.is_err() {
-            self.closed.store(true, Ordering::Relaxed);
+            Err(ret.unwrap_or(Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
         }
-        write_result
-    }
-
-    /// Close this WebSocket with the reason provided.
-    pub async fn close_with(&mut self, reason: CloseReason) -> Result<(), Error> {
-        self.closed.store(true, Ordering::Relaxed);
-        let WriteHalf {
-            split_writer,
-            writer,
-            ..
-        } = &mut *self.framed.split_writer.lock().await;
-        let write_result = write_close(split_writer, writer, reason, self.role.is_server()).await;
-
-        if write_result.is_err() {
-            self.closed.store(true, Ordering::Relaxed);
-        }
-        write_result
-    }
-
-    /// Returns whether this receiver is closed.
-    pub fn is_closed(&self) -> bool {
-        self.closed.load(Ordering::Relaxed)
+        STATE_CLOSED => Err(Error::with_cause(ErrorKind::Close, CloseError::Closed)),
+        s => panic!("Unexpected close state: {}", s),
     }
 }
 
@@ -603,7 +629,11 @@ where
             ext_encoder,
             ..
         } = sender;
-        let Receiver { closed, framed, .. } = receiver;
+        let Receiver {
+            close_state,
+            framed,
+            ..
+        } = receiver;
         let FramedIo {
             flags,
             max_message_size,
@@ -634,11 +664,18 @@ where
             max_message_size,
         });
 
+        let close_state = match close_state.load(Ordering::Acquire) {
+            STATE_OPEN => CloseState::NotClosed,
+            STATE_CLOSING => CloseState::Closing,
+            STATE_CLOSED => CloseState::Closed,
+            s => panic!("Unknown close state: {}", s),
+        };
+
         Ok(WebSocket::from_parts(
             framed,
             control_buffer,
             NegotiatedExtension::reunite(ext_encoder, ext_decoder),
-            CloseState::NotClosed,
+            close_state,
         ))
     } else {
         Err(ReuniteError { sender, receiver })

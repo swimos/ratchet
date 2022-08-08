@@ -259,7 +259,7 @@ impl From<InvalidHeaderValue> for Error {
 #[error("The channel is already closed")]
 pub enum CloseError {
     /// The channel closed nominally. This is **not** an error and instead indicates a clean closure
-    /// off the channel.
+    /// of the channel by either ourselves or the peer.
     #[error("The channel closed as expected")]
     Nominal,
     /// This is only produced when a user attempts to reuse a closed channel and instead indicates a
