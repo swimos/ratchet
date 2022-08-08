@@ -262,13 +262,13 @@ where
 
     /// Returns whether this WebSocket is closed.
     pub fn is_closed(&self) -> bool {
-        self.close_state.load(Ordering::Relaxed) == STATE_CLOSED
+        self.close_state.load(Ordering::SeqCst) == STATE_CLOSED
     }
 
     /// Returns whether this WebSocket is closing or closed.
     pub fn is_active(&self) -> bool {
         !matches!(
-            self.close_state.load(Ordering::Relaxed),
+            self.close_state.load(Ordering::SeqCst),
             STATE_CLOSED | STATE_CLOSING
         )
     }
@@ -365,7 +365,7 @@ where
             return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
 
-        self.close_state.store(STATE_CLOSING, Ordering::Release);
+        self.close_state.store(STATE_CLOSING, Ordering::SeqCst);
 
         let WriteHalf {
             split_writer,
@@ -507,7 +507,7 @@ where
             return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
 
-        self.close_state.store(STATE_CLOSING, Ordering::Release);
+        self.close_state.store(STATE_CLOSING, Ordering::SeqCst);
 
         let WriteHalf {
             split_writer,
@@ -519,13 +519,13 @@ where
 
     /// Returns whether this WebSocket is closed.
     pub fn is_closed(&self) -> bool {
-        self.close_state.load(Ordering::Relaxed) == STATE_CLOSED
+        self.close_state.load(Ordering::SeqCst) == STATE_CLOSED
     }
 
     /// Returns whether this WebSocket is closing or closed.
     pub fn is_active(&self) -> bool {
         !matches!(
-            self.close_state.load(Ordering::Relaxed),
+            self.close_state.load(Ordering::SeqCst),
             STATE_CLOSED | STATE_CLOSING
         )
     }
@@ -547,7 +547,7 @@ where
         ..
     } = framed;
 
-    match close_state.load(Ordering::Acquire) {
+    match close_state.load(Ordering::SeqCst) {
         STATE_OPEN => {
             let mut code = match &reason {
                 Some(reason) => u16::from(reason.code).to_be_bytes(),
@@ -568,7 +568,7 @@ where
                 )
                 .await;
             match write_result {
-                Ok(()) => close_state.store(STATE_CLOSING, Ordering::Release),
+                Ok(()) => close_state.store(STATE_CLOSING, Ordering::SeqCst),
                 Err(_) => {
                     if is_server {
                         // 7.1.1: the TCP stream should be closed first by the server
@@ -577,7 +577,7 @@ where
                         // already closed the TCP stream.
                         framed.close().await;
                     }
-                    close_state.store(STATE_CLOSED, Ordering::Release);
+                    close_state.store(STATE_CLOSED, Ordering::SeqCst);
                 }
             }
             match ret {
@@ -586,7 +586,7 @@ where
             }
         }
         STATE_CLOSING => {
-            close_state.store(STATE_CLOSED, Ordering::Release);
+            close_state.store(STATE_CLOSED, Ordering::SeqCst);
             if is_server {
                 // 7.1.1: the TCP stream should be closed first by the server
                 //
@@ -664,7 +664,7 @@ where
             max_message_size,
         });
 
-        let close_state = match close_state.load(Ordering::Acquire) {
+        let close_state = match close_state.load(Ordering::SeqCst) {
             STATE_OPEN => CloseState::NotClosed,
             STATE_CLOSING => CloseState::Closing,
             STATE_CLOSED => CloseState::Closed,

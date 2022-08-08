@@ -15,7 +15,7 @@
 use crate::framed::{read_next, write_close, FramedWrite, Item};
 use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
 use crate::split::{FramedIo, Receiver, Sender, WriteHalf};
-use crate::ws::{extension_encode, CloseState};
+use crate::ws::extension_encode;
 use crate::{
     CloseCode, CloseError, CloseReason, Error, Message, NegotiatedExtension, NoExt, NoExtDecoder,
     NoExtEncoder, Role, WebSocket, WebSocketConfig, WebSocketStream,
@@ -115,7 +115,6 @@ fn fixture() -> (
         NegotiatedExtension::from(NoExt),
         BytesMut::new(),
         Role::Server,
-        CloseState::NotClosed,
     )
     .split()
     .unwrap();
@@ -125,7 +124,6 @@ fn fixture() -> (
         NegotiatedExtension::from(NoExt),
         BytesMut::new(),
         Role::Client,
-        CloseState::NotClosed,
     )
     .split()
     .unwrap();

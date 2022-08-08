@@ -127,7 +127,6 @@ where
         extension: NegotiatedExtension<E>,
         read_buffer: BytesMut,
         role: Role,
-        close_state: CloseState,
     ) -> WebSocket<S, E> {
         let WebSocketConfig { max_message_size } = config;
         WebSocket {
@@ -140,7 +139,7 @@ where
             ),
             extension,
             control_buffer: BytesMut::with_capacity(CONTROL_MAX_SIZE),
-            close_state,
+            close_state: CloseState::NotClosed,
         }
     }
 
@@ -454,7 +453,7 @@ where
 mod tests {
     use crate::framed::Item;
     use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
-    use crate::ws::{extension_encode, CloseState};
+    use crate::ws::extension_encode;
     use crate::{
         CloseCode, CloseError, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role,
         WebSocket, WebSocketConfig, WebSocketStream,
@@ -516,7 +515,6 @@ mod tests {
             NegotiatedExtension::from(NoExt),
             BytesMut::new(),
             Role::Server,
-            CloseState::NotClosed,
         );
         let client = WebSocket::from_upgraded(
             config,
@@ -524,7 +522,6 @@ mod tests {
             NegotiatedExtension::from(NoExt),
             BytesMut::new(),
             Role::Client,
-            CloseState::NotClosed,
         );
 
         (client, server)
