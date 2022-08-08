@@ -409,3 +409,40 @@ async fn close_then_err() {
         .await
         .expect_err("Expected a broken connection");
 }
+
+#[tokio::test]
+async fn reuse_after_closure() {
+    let ((mut client_tx, mut client_rx), (_server_tx, mut server_rx)) = fixture();
+    let reason = CloseReason::new(CloseCode::Normal, None);
+
+    client_tx
+        .close(reason.clone())
+        .await
+        .expect("Write failure");
+
+    let mut buf = BytesMut::new();
+    let message = server_rx.read(&mut buf).await.expect("Read failure");
+
+    assert_eq!(message, Message::Close(Some(reason.clone())));
+    assert!(buf.is_empty());
+
+    let err = client_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a read failure");
+    assert!(err.is_close());
+    assert_eq!(
+        err.downcast_ref::<CloseError>().unwrap(),
+        &CloseError::Nominal
+    );
+
+    let err = client_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a read failure");
+    assert!(err.is_close());
+    assert_eq!(
+        err.downcast_ref::<CloseError>().unwrap(),
+        &CloseError::Closed
+    );
+}

@@ -774,4 +774,38 @@ mod tests {
             .await
             .expect_err("Expected a broken connection");
     }
+
+    #[tokio::test]
+    async fn reuse_after_closure() {
+        let (mut client, mut server) = fixture();
+        let reason = CloseReason::new(CloseCode::Normal, None);
+
+        client.close(reason.clone()).await.expect("Write failure");
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Close(Some(reason.clone())));
+        assert!(buf.is_empty());
+
+        let err = client
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a read failure");
+        assert!(err.is_close());
+        assert_eq!(
+            err.downcast_ref::<CloseError>().unwrap(),
+            &CloseError::Nominal
+        );
+
+        let err = client
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a read failure");
+        assert!(err.is_close());
+        assert_eq!(
+            err.downcast_ref::<CloseError>().unwrap(),
+            &CloseError::Closed
+        );
+    }
 }
