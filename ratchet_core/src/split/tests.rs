@@ -225,33 +225,6 @@ async fn interleaved_control_frames() {
 }
 
 #[tokio::test]
-async fn bad_ping_pong_response() {
-    let ((mut client_tx, mut client_rx), (mut server_tx, mut server_rx)) = fixture();
-
-    client_tx.write_ping("ping1").await.expect("Write failure");
-
-    let mut buf = BytesMut::new();
-    let message = server_rx.read(&mut buf).await.expect("Read failure");
-
-    assert_eq!(message, Message::Ping(Bytes::from("ping1")));
-    assert!(buf.is_empty());
-
-    // this needs to be a raw frame read as we don't want to change the contents of the client's
-    // control buffer but we still want to make sure that the server responds correctly.
-    let item = client_rx.read_frame(&mut buf).await.expect("Read failure");
-    assert_eq!(item, Item::Pong(BytesMut::from("ping1")));
-    assert!(buf.is_empty());
-
-    server_tx
-        .write_frame("bad data", OpCode::ControlCode(ControlCode::Pong), true)
-        .await
-        .expect("Write failure");
-
-    let error = client_rx.read(&mut buf).await.unwrap_err();
-    assert!(error.is_protocol());
-}
-
-#[tokio::test]
 async fn large_control_frames() {
     {
         let ((mut client_tx, _client_rx), (_server_tx, _server_rx)) = fixture();

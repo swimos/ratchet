@@ -31,7 +31,7 @@ use crate::framed::{
 use crate::protocol::{
     CloseCode, CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode,
 };
-use crate::ws::{extension_encode, CONTROL_DATA_MISMATCH, CONTROL_MAX_SIZE};
+use crate::ws::{extension_encode, CONTROL_MAX_SIZE};
 use crate::{
     framed, CloseError, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
     WebSocketStream,
@@ -471,41 +471,15 @@ where
                         return Ok(Message::Ping(ret));
                     }
                     Item::Pong(payload) => {
-                        let WriteHalf {
-                            split_writer,
-                            writer,
-                            control_buffer,
-                            ..
-                        } = &mut *split_writer.lock().await;
+                        let WriteHalf { control_buffer, .. } = &mut *split_writer.lock().await;
 
                         return if control_buffer.is_empty() {
                             trace!("Received an unsolicited pong frame");
                             Ok(Message::Pong(payload.freeze()))
                         } else {
-                            if control_buffer[..].eq(&payload[..]) {
-                                control_buffer.clear();
-                                trace!("Received pong frame");
-                                Ok(Message::Pong(payload.freeze()))
-                            } else {
-                                trace!("Received a pong frame with an incorrect payload. Closing the connection");
-                                closed.store(true, Ordering::Relaxed);
-
-                                write_close(
-                                    split_writer,
-                                    writer,
-                                    CloseReason {
-                                        code: CloseCode::Protocol,
-                                        description: Some(CONTROL_DATA_MISMATCH.to_string()),
-                                    },
-                                    is_server,
-                                )
-                                .await?;
-
-                                return Err(Error::with_cause(
-                                    ErrorKind::Protocol,
-                                    CONTROL_DATA_MISMATCH.to_string(),
-                                ));
-                            }
+                            control_buffer.clear();
+                            trace!("Received pong frame");
+                            Ok(Message::Pong(payload.freeze()))
                         };
                     }
                     Item::Close(reason) => {
