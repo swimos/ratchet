@@ -143,7 +143,7 @@ pub fn apply_headers(header_map: &mut HeaderMap, config: &DeflateConfig) {
     let encoder = DeflateHeaderEncoder(config);
     let mut bytes = BytesMut::new();
     bytes.truncate(bytes.len());
-    let _ = encoder.encode(&mut bytes);
+    encoder.encode(&mut bytes);
 
     header_map.insert(
         SEC_WEBSOCKET_EXTENSIONS,
@@ -269,11 +269,14 @@ fn validate_request_header(
                         // window of up to 32,768 bytes.
                         initialised_config.client_max_window_bits =
                             parse_window_parameter(window_param, config.client_max_window_bits)?;
-                        response_str.push_str(&format!(
+
+                        write!(
+                            response_str,
                             "; {}={}",
                             CLIENT_MAX_BITS,
                             initialised_config.client_max_window_bits.as_str()
-                        ));
+                        )
+                        .expect("Write failure");
                     }
                     Ok(())
                 })?;
@@ -436,7 +439,7 @@ fn parse_window_parameter(
     window_param: &str,
     max_window_bits: WindowBits,
 ) -> Result<WindowBits, NegotiationErr> {
-    let window_param = window_param.replace("\"", "");
+    let window_param = window_param.replace('\"', "");
     match window_param.trim().parse() {
         Ok(window_bits) => {
             if (LZ77_MIN_WINDOW_SIZE..=max_window_bits.0).contains(&window_bits) {

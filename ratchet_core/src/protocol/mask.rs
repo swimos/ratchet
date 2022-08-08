@@ -35,11 +35,11 @@ pub fn apply_mask(mask: u32, bytes: &mut [u8]) {
 #[inline]
 pub fn apply_mask_fast(bytes: &mut [u8], mask: [u8; 4]) {
     let mut mask_u32 = u32::from_ne_bytes(mask);
-    let (mut prefix, shorts, mut suffix) = unsafe { bytes.align_to_mut::<u32>() };
+    let (prefix, shorts, suffix) = unsafe { bytes.align_to_mut::<u32>() };
     let prefix_len = prefix.len();
 
     if prefix_len > 0 {
-        apply_mask_unoptimised(&mut prefix, mask);
+        apply_mask_unoptimised(prefix, mask);
 
         if cfg!(target_endian = "big") {
             mask_u32 = mask_u32.rotate_left(8 * prefix_len as u32)
@@ -53,7 +53,7 @@ pub fn apply_mask_fast(bytes: &mut [u8], mask: [u8; 4]) {
     }
 
     if !suffix.is_empty() {
-        apply_mask_unoptimised(&mut suffix, mask_u32.to_ne_bytes());
+        apply_mask_unoptimised(suffix, mask_u32.to_ne_bytes());
     }
 }
 

@@ -227,7 +227,7 @@ where
         } = self;
 
         let validated_request = build_request(request, extension, subprotocols)?;
-        encode_request(&mut buffered.buffer, validated_request, nonce);
+        encode_request(buffered.buffer, validated_request, nonce);
         Ok(())
     }
 
