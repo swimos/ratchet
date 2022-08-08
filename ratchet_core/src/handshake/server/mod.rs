@@ -22,7 +22,6 @@ use crate::handshake::server::encoding::{write_response, RequestParser};
 use crate::handshake::{StreamingParser, ACCEPT_KEY};
 use crate::handshake::{UPGRADE_STR, WEBSOCKET_STR};
 use crate::protocol::Role;
-use crate::ws::CloseState;
 use crate::{
     Error, HttpError, NoExtProvider, ProtocolRegistry, Request, WebSocket, WebSocketConfig,
     WebSocketStream,
@@ -287,14 +286,7 @@ where
 
         Ok(UpgradedServer {
             request,
-            websocket: WebSocket::from_upgraded(
-                config,
-                stream,
-                extension,
-                buf,
-                Role::Server,
-                CloseState::NotClosed,
-            ),
+            websocket: WebSocket::from_upgraded(config, stream, extension, buf, Role::Server),
             subprotocol,
         })
     }

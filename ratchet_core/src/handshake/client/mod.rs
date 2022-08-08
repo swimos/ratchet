@@ -32,7 +32,6 @@ use crate::handshake::{
     negotiate_response, validate_header, validate_header_value, ParseResult, ProtocolRegistry,
     StreamingParser, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
 };
-use crate::ws::CloseState;
 use crate::{
     NoExt, NoExtProvider, Role, TryIntoRequest, WebSocket, WebSocketConfig, WebSocketStream,
 };
@@ -86,14 +85,7 @@ where
     .await?;
 
     Ok(UpgradedClient {
-        websocket: WebSocket::from_upgraded(
-            config,
-            stream,
-            extension,
-            read_buffer,
-            Role::Client,
-            CloseState::NotClosed,
-        ),
+        websocket: WebSocket::from_upgraded(config, stream, extension, read_buffer, Role::Client),
         subprotocol,
     })
 }
@@ -126,14 +118,7 @@ where
     .await?;
 
     Ok(UpgradedClient {
-        websocket: WebSocket::from_upgraded(
-            config,
-            stream,
-            extension,
-            read_buffer,
-            Role::Client,
-            CloseState::NotClosed,
-        ),
+        websocket: WebSocket::from_upgraded(config, stream, extension, read_buffer, Role::Client),
         subprotocol,
     })
 }
