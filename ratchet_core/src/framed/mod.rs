@@ -572,6 +572,10 @@ where
         )
         .await
     }
+
+    pub async fn close(&mut self) {
+        let _r = self.io.shutdown().await;
+    }
 }
 
 pub async fn read_next<I, E>(
@@ -624,7 +628,6 @@ where
             |_, _| Ok(()),
         )
         .await
-        .map_err(|e| Error::with_cause(ErrorKind::Close, e))
 }
 
 pub async fn write_fragmented<A, I, F>(

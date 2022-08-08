@@ -31,7 +31,7 @@ use crate::framed::{
 use crate::protocol::{
     CloseCode, CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode,
 };
-use crate::ws::{extension_encode, CONTROL_MAX_SIZE};
+use crate::ws::{extension_encode, CloseState, CONTROL_MAX_SIZE};
 use crate::{
     framed, CloseError, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
     WebSocketStream,
@@ -296,7 +296,7 @@ where
         A: AsRef<[u8]>,
     {
         if self.is_closed() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
 
         let writer = &mut *self.split_writer.lock().await;
@@ -331,7 +331,7 @@ where
         A: AsRef<[u8]>,
     {
         if self.is_closed() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
         }
         let WriteHalf {
             split_writer,
@@ -638,7 +638,7 @@ where
             framed,
             control_buffer,
             NegotiatedExtension::reunite(ext_encoder, ext_decoder),
-            closed.load(Ordering::Relaxed),
+            CloseState::NotClosed,
         ))
     } else {
         Err(ReuniteError { sender, receiver })

@@ -59,7 +59,7 @@ pub use handshake::{
 pub use protocol::{
     CloseCode, CloseReason, Message, MessageType, PayloadType, Role, WebSocketConfig,
 };
-pub use ws::WebSocket;
+pub use ws::{CloseState, WebSocket};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
