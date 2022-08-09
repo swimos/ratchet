@@ -592,10 +592,10 @@ where
                 //
                 // We aren't interested in any IO errors produced here as the peer *may* have
                 // already closed the TCP stream.
-                let _r = framed.close().await;
+                framed.close().await;
             }
 
-            Err(ret.unwrap_or(Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
+            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
         }
         STATE_CLOSED => Err(Error::with_cause(ErrorKind::Close, CloseError::Closed)),
         s => panic!("Unexpected close state: {}", s),

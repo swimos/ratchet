@@ -430,7 +430,7 @@ where
                 framed.close().await;
             }
 
-            Err(ret.unwrap_or(Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
+            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
         }
         CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseError::Closed)),
     }
