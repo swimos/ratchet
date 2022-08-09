@@ -31,7 +31,7 @@ use crate::framed::{
 use crate::protocol::{
     CloseCode, CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode,
 };
-use crate::ws::{extension_encode, CONTROL_DATA_MISMATCH, CONTROL_MAX_SIZE};
+use crate::ws::{extension_encode, CONTROL_MAX_SIZE};
 use crate::{
     framed, CloseError, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
     WebSocketStream,
@@ -163,7 +163,7 @@ where
                     ))
                 } else {
                     control_buffer.clear();
-                    control_buffer.extend_from_slice(&buf);
+                    control_buffer.extend_from_slice(buf);
 
                     writer
                         .write(
@@ -434,128 +434,99 @@ where
         } = framed;
         let is_server = role.is_server();
 
-        loop {
-            match read_next(
-                read_half,
-                reader,
-                flags,
-                *max_message_size,
-                read_buffer,
-                ext_decoder,
-            )
-            .await
-            {
-                Ok(item) => match item {
-                    Item::Binary => return Ok(Message::Binary),
-                    Item::Text => return Ok(Message::Text),
-                    Item::Ping(payload) => {
-                        trace!("Received a ping frame. Responding with pong");
+        return match read_next(
+            read_half,
+            reader,
+            flags,
+            *max_message_size,
+            read_buffer,
+            ext_decoder,
+        )
+        .await
+        {
+            Ok(item) => match item {
+                Item::Binary => Ok(Message::Binary),
+                Item::Text => Ok(Message::Text),
+                Item::Ping(payload) => {
+                    trace!("Received a ping frame. Responding with pong");
 
-                        let WriteHalf {
+                    let WriteHalf {
+                        split_writer,
+                        writer,
+                        ..
+                    } = &mut *split_writer.lock().await;
+
+                    let ret = payload.clone().freeze();
+                    writer
+                        .write(
                             split_writer,
-                            writer,
-                            ..
-                        } = &mut *split_writer.lock().await;
+                            is_server,
+                            OpCode::ControlCode(ControlCode::Pong),
+                            HeaderFlags::FIN,
+                            payload,
+                            |_, _| Ok(()),
+                        )
+                        .await?;
+                    Ok(Message::Ping(ret))
+                }
+                Item::Pong(payload) => {
+                    let WriteHalf { control_buffer, .. } = &mut *split_writer.lock().await;
 
-                        let ret = payload.clone().freeze();
-                        writer
-                            .write(
-                                split_writer,
-                                is_server,
-                                OpCode::ControlCode(ControlCode::Pong),
-                                HeaderFlags::FIN,
-                                payload,
-                                |_, _| Ok(()),
-                            )
-                            .await?;
-                        return Ok(Message::Ping(ret));
+                    if control_buffer.is_empty() {
+                        trace!("Received an unsolicited pong frame");
+                        Ok(Message::Pong(payload.freeze()))
+                    } else {
+                        control_buffer.clear();
+                        trace!("Received pong frame");
+                        Ok(Message::Pong(payload.freeze()))
                     }
-                    Item::Pong(payload) => {
-                        let WriteHalf {
-                            split_writer,
-                            writer,
-                            control_buffer,
-                            ..
-                        } = &mut *split_writer.lock().await;
+                }
+                Item::Close(reason) => {
+                    closed.store(true, Ordering::Relaxed);
+                    let WriteHalf {
+                        split_writer,
+                        writer,
+                        ..
+                    } = &mut *split_writer.lock().await;
 
-                        return if control_buffer.is_empty() {
-                            trace!("Received an unsolicited pong frame");
-                            Ok(Message::Pong(payload.freeze()))
-                        } else {
-                            if control_buffer[..].eq(&payload[..]) {
-                                control_buffer.clear();
-                                trace!("Received pong frame");
-                                Ok(Message::Pong(payload.freeze()))
-                            } else {
-                                trace!("Received a pong frame with an incorrect payload. Closing the connection");
-                                closed.store(true, Ordering::Relaxed);
-
-                                write_close(
+                    match reason {
+                        Some(reason) => {
+                            write_close(split_writer, writer, reason.clone(), is_server).await?;
+                            Ok(Message::Close(Some(reason)))
+                        }
+                        None => {
+                            writer
+                                .write(
                                     split_writer,
-                                    writer,
-                                    CloseReason {
-                                        code: CloseCode::Protocol,
-                                        description: Some(CONTROL_DATA_MISMATCH.to_string()),
-                                    },
                                     is_server,
+                                    OpCode::ControlCode(ControlCode::Close),
+                                    HeaderFlags::FIN,
+                                    &mut [],
+                                    |_, _| Ok(()),
                                 )
                                 .await?;
-
-                                return Err(Error::with_cause(
-                                    ErrorKind::Protocol,
-                                    CONTROL_DATA_MISMATCH.to_string(),
-                                ));
-                            }
-                        };
+                            Ok(Message::Close(None))
+                        }
                     }
-                    Item::Close(reason) => {
-                        closed.store(true, Ordering::Relaxed);
-                        let WriteHalf {
-                            split_writer,
-                            writer,
-                            ..
-                        } = &mut *split_writer.lock().await;
-
-                        return match reason {
-                            Some(reason) => {
-                                write_close(split_writer, writer, reason.clone(), is_server)
-                                    .await?;
-                                Ok(Message::Close(Some(reason)))
-                            }
-                            None => {
-                                writer
-                                    .write(
-                                        split_writer,
-                                        is_server,
-                                        OpCode::ControlCode(ControlCode::Close),
-                                        HeaderFlags::FIN,
-                                        &mut [],
-                                        |_, _| Ok(()),
-                                    )
-                                    .await?;
-                                Ok(Message::Close(None))
-                            }
-                        };
-                    }
-                },
-                Err(e) => {
-                    error!("WebSocket read failure: {:?}", e);
-                    closed.store(true, Ordering::Relaxed);
-
-                    if !e.is_io() {
-                        let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
-                        let WriteHalf {
-                            split_writer,
-                            writer,
-                            ..
-                        } = &mut *split_writer.lock().await;
-                        write_close(split_writer, writer, reason, is_server).await?;
-                    }
-
-                    return Err(e);
                 }
+            },
+            Err(e) => {
+                error!("WebSocket read failure: {:?}", e);
+                closed.store(true, Ordering::Relaxed);
+
+                if !e.is_io() {
+                    let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
+                    let WriteHalf {
+                        split_writer,
+                        writer,
+                        ..
+                    } = &mut *split_writer.lock().await;
+                    write_close(split_writer, writer, reason, is_server).await?;
+                }
+
+                Err(e)
             }
-        }
+        };
     }
 
     /// Close this receiver with the reason provided.

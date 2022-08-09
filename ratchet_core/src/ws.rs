@@ -30,7 +30,6 @@ use crate::split::{split, Receiver, Sender};
 use ratchet_ext::SplittableExtension;
 
 pub const CONTROL_MAX_SIZE: usize = 125;
-pub const CONTROL_DATA_MISMATCH: &str = "Unexpected control frame data";
 
 #[cfg(feature = "split")]
 type SplitSocket<S, E> = (
@@ -191,25 +190,9 @@ where
                         trace!("Received an unsolicited pong frame");
                         Ok(Message::Pong(payload.freeze()))
                     } else {
-                        if control_buffer[..].eq(&payload[..]) {
-                            control_buffer.clear();
-                            trace!("Received pong frame");
-                            Ok(Message::Pong(payload.freeze()))
-                        } else {
-                            trace!("Received a pong frame with an incorrect payload. Closing the connection");
-                            self.closed = true;
-                            self.framed
-                                .write_close(CloseReason {
-                                    code: CloseCode::Protocol,
-                                    description: Some(CONTROL_DATA_MISMATCH.to_string()),
-                                })
-                                .await?;
-
-                            return Err(Error::with_cause(
-                                ErrorKind::Protocol,
-                                CONTROL_DATA_MISMATCH.to_string(),
-                            ));
-                        }
+                        control_buffer.clear();
+                        trace!("Received pong frame");
+                        Ok(Message::Pong(payload.freeze()))
                     }
                 }
                 Item::Close(reason) => {
@@ -300,7 +283,7 @@ where
                     ));
                 } else {
                     self.control_buffer.clear();
-                    self.control_buffer.extend_from_slice(&buf);
+                    self.control_buffer.extend_from_slice(buf);
                     OpCode::ControlCode(ControlCode::Ping)
                 }
             }
@@ -588,33 +571,6 @@ mod tests {
             String::from_utf8(buf.to_vec()).expect("Malformatted data received"),
             "123456789"
         );
-    }
-
-    #[tokio::test]
-    async fn bad_ping_pong_response() {
-        let (mut client, mut server) = fixture();
-
-        client.write_ping("ping1").await.expect("Write failure");
-
-        let mut buf = BytesMut::new();
-        let message = server.read(&mut buf).await.expect("Read failure");
-
-        assert_eq!(message, Message::Ping(Bytes::from("ping1")));
-        assert!(buf.is_empty());
-
-        // this needs to be a raw frame read as we don't want to change the contents of the client's
-        // control buffer but we still want to make sure that the server responds correctly.
-        let item = client.read_frame(&mut buf).await.expect("Read failure");
-        assert_eq!(item, Item::Pong(BytesMut::from("ping1")));
-        assert!(buf.is_empty());
-
-        server
-            .write_frame("bad data", OpCode::ControlCode(ControlCode::Pong), true)
-            .await
-            .expect("Write failure");
-
-        let error = client.read(&mut buf).await.unwrap_err();
-        assert!(error.is_protocol());
     }
 
     #[tokio::test]

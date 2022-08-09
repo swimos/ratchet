@@ -21,9 +21,9 @@ mod mask;
 pub use frame::*;
 pub use mask::apply_mask;
 
+use bytes::Bytes;
 use derive_more::Display;
 use std::convert::TryFrom;
-use bytes::Bytes;
 use thiserror::Error;
 
 bitflags::bitflags! {
