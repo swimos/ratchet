@@ -466,12 +466,11 @@ where
 
                     if control_buffer.is_empty() {
                         trace!("Received an unsolicited pong frame");
-                        Ok(Message::Pong(payload.freeze()))
                     } else {
                         control_buffer.clear();
                         trace!("Received pong frame");
-                        Ok(Message::Pong(payload.freeze()))
                     }
+                    Ok(Message::Pong(payload.freeze()))
                 }
                 Item::Close(reason) => {
                     close(
