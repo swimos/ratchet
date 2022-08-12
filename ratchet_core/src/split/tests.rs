@@ -17,7 +17,7 @@ use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
 use crate::split::{FramedIo, Receiver, Sender, WriteHalf};
 use crate::ws::extension_encode;
 use crate::{
-    CloseCode, CloseError, CloseReason, Error, Message, NegotiatedExtension, NoExt, NoExtDecoder,
+    CloseCause, CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, NoExtDecoder,
     NoExtEncoder, Role, WebSocket, WebSocketConfig, WebSocketStream,
 };
 use bytes::{Bytes, BytesMut};
@@ -300,8 +300,8 @@ async fn after_close() {
         .expect_err("Expected a close error");
     assert!(error.is_close());
 
-    let source = error.downcast_ref::<CloseError>().unwrap();
-    assert_eq!(source, &CloseError::Nominal);
+    let source = error.downcast_ref::<CloseCause>().unwrap();
+    assert_eq!(source, &CloseCause::Stopped);
 }
 
 #[tokio::test]
@@ -430,8 +430,8 @@ async fn reuse_after_closure() {
         .expect_err("Expected a read failure");
     assert!(err.is_close());
     assert_eq!(
-        err.downcast_ref::<CloseError>().unwrap(),
-        &CloseError::Nominal
+        err.downcast_ref::<CloseCause>().unwrap(),
+        &CloseCause::Stopped
     );
 
     let err = client_rx
@@ -440,7 +440,7 @@ async fn reuse_after_closure() {
         .expect_err("Expected a read failure");
     assert!(err.is_close());
     assert_eq!(
-        err.downcast_ref::<CloseError>().unwrap(),
-        &CloseError::Closed
+        err.downcast_ref::<CloseCause>().unwrap(),
+        &CloseCause::Error
     );
 }

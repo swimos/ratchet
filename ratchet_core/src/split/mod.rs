@@ -32,7 +32,7 @@ use crate::framed::{
 use crate::protocol::{CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode};
 use crate::ws::{extension_encode, CloseState, CONTROL_MAX_SIZE};
 use crate::{
-    framed, CloseError, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
+    framed, CloseCause, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
     WebSocketStream,
 };
 
@@ -267,10 +267,7 @@ where
 
     /// Returns whether this WebSocket is closing or closed.
     pub fn is_active(&self) -> bool {
-        !matches!(
-            self.close_state.load(Ordering::SeqCst),
-            STATE_CLOSED | STATE_CLOSING
-        )
+        matches!(self.close_state.load(Ordering::SeqCst), STATE_OPEN)
     }
 
     /// Constructs a new text WebSocket message with a payload of `data`.
@@ -311,7 +308,7 @@ where
         A: AsRef<[u8]>,
     {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         let writer = &mut *self.split_writer.lock().await;
@@ -339,7 +336,7 @@ where
         A: AsRef<[u8]>,
     {
         if self.is_closed() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
         let WriteHalf {
             split_writer,
@@ -362,7 +359,7 @@ where
     /// Close this Sender with the reason provided.    
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         self.close_state.store(STATE_CLOSING, Ordering::SeqCst);
@@ -410,7 +407,7 @@ where
     /// of `read_buffer` are **not** then modified before calling `read` again.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
         if self.is_closed() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         let Receiver {
@@ -504,7 +501,7 @@ where
     /// Close this Sender with the reason provided.    
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         self.close_state.store(STATE_CLOSING, Ordering::SeqCst);
@@ -524,10 +521,7 @@ where
 
     /// Returns whether this WebSocket is closing or closed.
     pub fn is_active(&self) -> bool {
-        !matches!(
-            self.close_state.load(Ordering::SeqCst),
-            STATE_CLOSED | STATE_CLOSING
-        )
+        matches!(self.close_state.load(Ordering::SeqCst), STATE_OPEN)
     }
 }
 
@@ -595,9 +589,9 @@ where
                 framed.close().await;
             }
 
-            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
+            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
         }
-        STATE_CLOSED => Err(Error::with_cause(ErrorKind::Close, CloseError::Closed)),
+        STATE_CLOSED => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
         s => panic!("Unexpected close state: {}", s),
     }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::errors::{CloseError, Error, ErrorKind, ProtocolError};
+use crate::errors::{CloseCause, Error, ErrorKind, ProtocolError};
 use crate::ext::NegotiatedExtension;
 use crate::framed::{FramedIo, Item};
 use crate::protocol::{
@@ -173,7 +173,7 @@ where
     /// `read_buffer` are **not** then modified before calling `read` again.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
         if self.is_closed() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         let WebSocket {
@@ -258,7 +258,7 @@ where
         A: AsRef<[u8]>,
     {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         let buf = buf.as_ref();
@@ -301,7 +301,7 @@ where
     /// Close this WebSocket with the reason provided.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         self.close_state = CloseState::Closing;
@@ -321,7 +321,7 @@ where
         A: AsRef<[u8]>,
     {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError::Closed));
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
 
         let encoder = &mut self.extension;
@@ -339,7 +339,7 @@ where
 
     /// Returns whether this WebSocket is closing or closed.
     pub fn is_active(&self) -> bool {
-        !matches!(self.close_state, CloseState::Closed | CloseState::Closing)
+        matches!(self.close_state, CloseState::NotClosed)
     }
 
     /// Attempt to split the `WebSocket` into its sender and receiver halves.
@@ -361,7 +361,7 @@ where
         E: SplittableExtension,
     {
         if self.is_closed() {
-            Err(Error::with_cause(ErrorKind::Close, CloseError::Closed))
+            Err(Error::with_cause(ErrorKind::Close, CloseCause::Error))
         } else {
             let WebSocket {
                 framed,
@@ -430,9 +430,9 @@ where
                 framed.close().await;
             }
 
-            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseError::Nominal)))
+            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
         }
-        CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseError::Closed)),
+        CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
     }
 }
 
@@ -455,7 +455,7 @@ mod tests {
     use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
     use crate::ws::extension_encode;
     use crate::{
-        CloseCode, CloseError, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role,
+        CloseCause, CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role,
         WebSocket, WebSocketConfig, WebSocketStream,
     };
     use bytes::{Bytes, BytesMut};
@@ -689,8 +689,8 @@ mod tests {
             .expect_err("Expected a close error");
         assert!(error.is_close());
 
-        let source = error.downcast_ref::<CloseError>().unwrap();
-        assert_eq!(source, &CloseError::Nominal);
+        let source = error.downcast_ref::<CloseCause>().unwrap();
+        assert_eq!(source, &CloseCause::Stopped);
     }
 
     #[tokio::test]
@@ -791,8 +791,8 @@ mod tests {
             .expect_err("Expected a read failure");
         assert!(err.is_close());
         assert_eq!(
-            err.downcast_ref::<CloseError>().unwrap(),
-            &CloseError::Nominal
+            err.downcast_ref::<CloseCause>().unwrap(),
+            &CloseCause::Stopped
         );
 
         let err = client
@@ -801,8 +801,8 @@ mod tests {
             .expect_err("Expected a read failure");
         assert!(err.is_close());
         assert_eq!(
-            err.downcast_ref::<CloseError>().unwrap(),
-            &CloseError::Closed
+            err.downcast_ref::<CloseCause>().unwrap(),
+            &CloseCause::Error
         );
     }
 }
