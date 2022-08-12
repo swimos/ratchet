@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::errors::{CloseError, Error, ErrorKind, ProtocolError};
+use crate::errors::{CloseCause, Error, ErrorKind, ProtocolError};
 use crate::ext::NegotiatedExtension;
 use crate::framed::{FramedIo, Item};
 use crate::protocol::{
-    CloseCode, CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode,
-    PayloadType, Role,
+    CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
+    Role,
 };
 use crate::{WebSocketConfig, WebSocketStream};
 use bytes::BytesMut;
@@ -78,7 +78,18 @@ pub struct WebSocket<S, E> {
     framed: FramedIo<S>,
     control_buffer: BytesMut,
     extension: NegotiatedExtension<E>,
-    closed: bool,
+    close_state: CloseState,
+}
+
+/// Denotes the current state of a WebSocket session.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum CloseState {
+    /// The session is active.
+    NotClosed,
+    /// Either a user or peer requested closure of the session has been requested.
+    Closing,
+    /// The WebSocket session is closed.
+    Closed,
 }
 
 impl<S, E> WebSocket<S, E>
@@ -91,13 +102,13 @@ where
         framed: FramedIo<S>,
         control_buffer: BytesMut,
         extension: NegotiatedExtension<E>,
-        closed: bool,
+        close_state: CloseState,
     ) -> WebSocket<S, E> {
         WebSocket {
             framed,
             control_buffer,
             extension,
-            closed,
+            close_state,
         }
     }
 
@@ -128,7 +139,7 @@ where
             ),
             extension,
             control_buffer: BytesMut::with_capacity(CONTROL_MAX_SIZE),
-            closed: false,
+            close_state: CloseState::NotClosed,
         }
     }
 
@@ -145,28 +156,33 @@ where
     /// received or the error that was produced.
     ///
     /// # Errors
-    /// If an error is produced during a read operation the contents of `read_buffer` must be
-    /// considered to be dirty.
+    /// In the event that an error is produced, an attempt is made to cleanly close the connection
+    /// by sending a close frame to the peer. If this attempt fails, then the connection is
+    /// abruptly closed and the cause of the error is returned.
     ///
-    /// # Note
-    /// Ratchet transparently handles ping messages received from the peer by returning a pong frame
-    /// and this function will return `Message::Pong` if one has been received. As per [RFC6455](https://datatracker.ietf.org/doc/html/rfc6455)
-    /// these may be interleaved between data frames. In the event of one being received while
-    /// reading a continuation, this function will then yield `Message::Ping` and the `read_buffer`
-    /// will contain the data received up to that point. The callee must ensure that the contents
-    /// of `read_buffer` are **not** then modified before calling `read` again.
+    /// In the event that an error is produced the contents of `read_buffer` must be considered to
+    /// be dirty; unless the error indicates a clean closure.
+    ///
+    /// # Control frames
+    /// Ratchet transparently handles ping messages received from the peer in read operations by
+    /// returning a pong frame and this function will return `Message::Pong` if one has been
+    /// received. As per [RFC6455](https://datatracker.ietf.org/doc/html/rfc6455) these may be
+    /// interleaved between data frames. In the event of one being received while reading a
+    /// continuation, this function will then yield `Message::Ping` and the `read_buffer` will
+    /// contain the data received up to that point. The callee must ensure that the contents of
+    /// `read_buffer` are **not** then modified before calling `read` again.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+        }
+
         let WebSocket {
             framed,
-            closed,
+            close_state,
             control_buffer,
             extension,
             ..
         } = self;
-
-        if *closed {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
-        }
 
         return match framed.read_next(read_buffer, extension).await {
             Ok(item) => match item {
@@ -188,44 +204,17 @@ where
                 Item::Pong(payload) => {
                     if control_buffer.is_empty() {
                         trace!("Received an unsolicited pong frame");
-                        Ok(Message::Pong(payload.freeze()))
                     } else {
                         control_buffer.clear();
                         trace!("Received pong frame");
-                        Ok(Message::Pong(payload.freeze()))
                     }
+                    Ok(Message::Pong(payload.freeze()))
                 }
-                Item::Close(reason) => {
-                    *closed = true;
-                    match reason {
-                        Some(reason) => {
-                            framed.write_close(reason.clone()).await?;
-                            Ok(Message::Close(Some(reason)))
-                        }
-                        None => {
-                            framed
-                                .write(
-                                    OpCode::ControlCode(ControlCode::Close),
-                                    HeaderFlags::FIN,
-                                    &mut [],
-                                    |_, _| Ok(()),
-                                )
-                                .await?;
-                            Ok(Message::Close(None))
-                        }
-                    }
-                }
+                Item::Close(reason) => close(close_state, framed, reason, None).await,
             },
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
-                self.closed = true;
-
-                if !e.is_io() {
-                    let reason = CloseReason::new(CloseCode::Protocol, Some(e.to_string()));
-                    self.framed.write_close(reason).await?;
-                }
-
-                Err(e)
+                close(close_state, framed, None, Some(e)).await
             }
         };
     }
@@ -267,10 +256,11 @@ where
     where
         A: AsRef<[u8]>,
     {
-        let buf = buf.as_ref();
-        if self.closed {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
+
+        let buf = buf.as_ref();
 
         let op_code = match message_type {
             PayloadType::Text => OpCode::DataCode(DataCode::Text),
@@ -300,32 +290,20 @@ where
         };
 
         let encoder = &mut self.extension;
-        match self
-            .framed
+        self.framed
             .write(op_code, HeaderFlags::FIN, buf, |payload, header| {
                 extension_encode(encoder, payload, header)
             })
             .await
-        {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                self.closed = true;
-                Err(e)
-            }
+    }
+
+    /// Close this WebSocket with the reason provided.
+    pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
-    }
 
-    /// Close this WebSocket with the reason provided.
-    pub async fn close(&mut self, reason: Option<String>) -> Result<(), Error> {
-        self.closed = true;
-        self.framed
-            .write_close(CloseReason::new(CloseCode::Normal, reason))
-            .await
-    }
-
-    /// Close this WebSocket with the reason provided.
-    pub async fn close_with(&mut self, reason: CloseReason) -> Result<(), Error> {
-        self.closed = true;
+        self.close_state = CloseState::Closing;
         self.framed.write_close(reason).await
     }
 
@@ -341,9 +319,10 @@ where
     where
         A: AsRef<[u8]>,
     {
-        if self.closed {
-            return Err(Error::with_cause(ErrorKind::Close, CloseError));
+        if !self.is_active() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
         }
+
         let encoder = &mut self.extension;
         self.framed
             .write_fragmented(buf, message_type, fragment_size, |payload, header| {
@@ -354,7 +333,12 @@ where
 
     /// Returns whether this WebSocket is closed.
     pub fn is_closed(&self) -> bool {
-        self.closed
+        self.close_state == CloseState::Closed
+    }
+
+    /// Returns whether this WebSocket is closing or closed.
+    pub fn is_active(&self) -> bool {
+        matches!(self.close_state, CloseState::NotClosed)
     }
 
     /// Attempt to split the `WebSocket` into its sender and receiver halves.
@@ -376,7 +360,7 @@ where
         E: SplittableExtension,
     {
         if self.is_closed() {
-            Err(Error::with_cause(ErrorKind::Close, CloseError))
+            Err(Error::with_cause(ErrorKind::Close, CloseCause::Error))
         } else {
             let WebSocket {
                 framed,
@@ -386,6 +370,68 @@ where
             } = self;
             Ok(split(framed, control_buffer, extension))
         }
+    }
+}
+
+async fn close<S>(
+    close_state: &mut CloseState,
+    framed: &mut FramedIo<S>,
+    reason: Option<CloseReason>,
+    ret: Option<Error>,
+) -> Result<Message, Error>
+where
+    S: WebSocketStream,
+{
+    let server = framed.is_server();
+    match *close_state {
+        CloseState::NotClosed => {
+            let mut code = match &reason {
+                Some(reason) => u16::from(reason.code).to_be_bytes(),
+                None => [0; 2],
+            };
+
+            // we don't want to immediately await the echoed close frame as the peer may elect to
+            // drain any pending messages **before** echoing the close frame
+
+            let write_result = framed
+                .write(
+                    OpCode::ControlCode(ControlCode::Close),
+                    HeaderFlags::FIN,
+                    &mut code,
+                    |_, _| Ok(()),
+                )
+                .await;
+            match write_result {
+                Ok(()) => *close_state = CloseState::Closing,
+                Err(_) => {
+                    if server {
+                        // 7.1.1: the TCP stream should be closed first by the server
+                        //
+                        // We aren't interested in any IO errors produced here as the peer *may* have
+                        // already closed the TCP stream.
+                        framed.close().await;
+                    }
+                    *close_state = CloseState::Closed;
+                }
+            }
+            match ret {
+                Some(err) => Err(err),
+                None => Ok(Message::Close(reason)),
+            }
+        }
+        CloseState::Closing => {
+            *close_state = CloseState::Closed;
+            if server {
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                framed.close().await;
+            }
+
+            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
+        }
+        CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
     }
 }
 
@@ -408,8 +454,8 @@ mod tests {
     use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
     use crate::ws::extension_encode;
     use crate::{
-        Error, Message, NegotiatedExtension, NoExt, Role, WebSocket, WebSocketConfig,
-        WebSocketStream,
+        CloseCause, CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role,
+        WebSocket, WebSocketConfig, WebSocketStream,
     };
     use bytes::{Bytes, BytesMut};
     use ratchet_ext::Extension;
@@ -590,5 +636,172 @@ mod tests {
             let error = client.read(&mut BytesMut::new()).await.unwrap_err();
             assert!(error.is_protocol());
         }
+    }
+
+    #[tokio::test]
+    async fn closes_cleanly() {
+        let (mut client, mut server) = fixture();
+
+        let reason = CloseReason::new(CloseCode::GoingAway, Some("Bonsoir, Elliot".to_string()));
+
+        client.close(reason.clone()).await.expect("Close failure");
+
+        drop(client);
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Close(Some(reason)));
+        assert!(buf.is_empty());
+    }
+
+    #[tokio::test]
+    async fn drop_end() {
+        let (client, mut server) = fixture();
+        drop(client);
+
+        let mut buf = BytesMut::new();
+        let err = server.read(&mut buf).await.expect_err("Read failure");
+        assert!(err.is_io());
+    }
+
+    #[tokio::test]
+    async fn after_close() {
+        let (mut client, mut server) = fixture();
+        let reason = CloseReason::new(CloseCode::Normal, None);
+
+        client.close(reason.clone()).await.expect("Close failure");
+        client
+            .write_ping(&[])
+            .await
+            .expect_err("Expected a write failure");
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Close(Some(reason.clone())));
+        assert!(buf.is_empty());
+
+        let error = client
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a close error");
+        assert!(error.is_close());
+
+        let source = error.downcast_ref::<CloseCause>().unwrap();
+        assert_eq!(source, &CloseCause::Stopped);
+    }
+
+    #[tokio::test]
+    async fn close_code_disagreement() {
+        let (mut client, mut server) = fixture();
+
+        client
+            .framed
+            .write_close(CloseReason::new(CloseCode::Normal, None))
+            .await
+            .expect("Write failure");
+        server
+            .framed
+            .write_close(CloseReason::new(CloseCode::Protocol, None))
+            .await
+            .expect("Write failure");
+
+        let mut buf = BytesMut::new();
+        let message = client.read(&mut buf).await.expect("Read failure");
+        assert_eq!(
+            message,
+            Message::Close(Some(CloseReason::new(CloseCode::Protocol, None)))
+        );
+
+        let message = server.read(&mut buf).await.expect("Read failure");
+        assert_eq!(
+            message,
+            Message::Close(Some(CloseReason::new(CloseCode::Normal, None)))
+        );
+    }
+
+    #[tokio::test]
+    async fn read_before_close() {
+        let (mut client, mut server) = fixture();
+        let reason = CloseReason::new(CloseCode::Normal, Some("reason".to_string()));
+
+        server.close(reason.clone()).await.expect("Write failure");
+
+        for i in 0..5 {
+            client
+                .write_text(i.to_string())
+                .await
+                .expect("Write failure");
+        }
+
+        let mut buf = BytesMut::new();
+        let message = client.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Close(Some(reason)));
+
+        let mut buf = BytesMut::new();
+
+        for _ in 0..5 {
+            let message = server.read(&mut buf).await.expect("Read failure");
+            assert_eq!(message, Message::Text);
+        }
+
+        let err = server
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a nominal closure");
+
+        assert!(err.is_close())
+    }
+
+    #[tokio::test]
+    async fn close_then_err() {
+        let (mut client, server) = fixture();
+        client
+            .close(CloseReason::new(CloseCode::Normal, None))
+            .await
+            .expect("Write error");
+        drop(server);
+
+        let mut buf = BytesMut::new();
+        client
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a broken connection");
+    }
+
+    #[tokio::test]
+    async fn reuse_after_closure() {
+        let (mut client, mut server) = fixture();
+        let reason = CloseReason::new(CloseCode::Normal, None);
+
+        client.close(reason.clone()).await.expect("Write failure");
+
+        let mut buf = BytesMut::new();
+        let message = server.read(&mut buf).await.expect("Read failure");
+
+        assert_eq!(message, Message::Close(Some(reason.clone())));
+        assert!(buf.is_empty());
+
+        let err = client
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a read failure");
+        assert!(err.is_close());
+        assert_eq!(
+            err.downcast_ref::<CloseCause>().unwrap(),
+            &CloseCause::Stopped
+        );
+
+        let err = client
+            .read(&mut buf)
+            .await
+            .expect_err("Expected a read failure");
+        assert!(err.is_close());
+        assert_eq!(
+            err.downcast_ref::<CloseCause>().unwrap(),
+            &CloseCause::Error
+        );
     }
 }

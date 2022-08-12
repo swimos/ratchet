@@ -26,6 +26,8 @@
     unused_import_braces
 )]
 
+extern crate core;
+
 #[cfg(test)]
 mod test_fixture;
 
@@ -40,14 +42,14 @@ mod ws;
 /// Split WebSocket implementation.
 #[cfg(feature = "split")]
 mod split;
+#[cfg(feature = "split")]
+pub use split::{Receiver, ReuniteError, Sender};
 
 #[allow(missing_docs)]
 #[cfg(feature = "fixture")]
 pub mod fixture {
     pub use super::protocol::write_text_frame_header;
 }
-#[cfg(feature = "split")]
-pub use split::{Receiver, ReuniteError, Sender};
 
 pub use builder::{WebSocketClientBuilder, WebSocketServerBuilder};
 pub use errors::*;
@@ -59,7 +61,7 @@ pub use handshake::{
 pub use protocol::{
     CloseCode, CloseReason, Message, MessageType, PayloadType, Role, WebSocketConfig,
 };
-pub use ws::WebSocket;
+pub use ws::{CloseState, WebSocket};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 

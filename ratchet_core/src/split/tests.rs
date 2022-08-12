@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::framed::{read_next, FramedWrite, Item};
+use crate::framed::{read_next, write_close, FramedWrite, Item};
 use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
-use crate::split::{FramedIo, Receiver, Sender};
+use crate::split::{FramedIo, Receiver, Sender, WriteHalf};
 use crate::ws::extension_encode;
 use crate::{
-    Error, Message, NegotiatedExtension, NoExt, NoExtDecoder, NoExtEncoder, Role, WebSocket,
-    WebSocketConfig, WebSocketStream,
+    CloseCause, CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, NoExtDecoder,
+    NoExtEncoder, Role, WebSocket, WebSocketConfig, WebSocketStream,
 };
 use bytes::{Bytes, BytesMut};
 use ratchet_ext::{ExtensionDecoder, ExtensionEncoder};
@@ -241,4 +241,206 @@ async fn large_control_frames() {
         let error = client_rx.read(&mut BytesMut::new()).await.unwrap_err();
         assert!(error.is_protocol());
     }
+}
+
+#[tokio::test]
+async fn closes_cleanly() {
+    let ((mut client_tx, _client_rx), (_server_tx, mut server_rx)) = fixture();
+
+    let reason = CloseReason::new(CloseCode::GoingAway, Some("Bonsoir, Elliot".to_string()));
+
+    client_tx
+        .close(reason.clone())
+        .await
+        .expect("Close failure");
+
+    drop(client_tx);
+
+    let mut buf = BytesMut::new();
+    let message = server_rx.read(&mut buf).await.expect("Read failure");
+
+    assert_eq!(message, Message::Close(Some(reason)));
+    assert!(buf.is_empty());
+}
+
+#[tokio::test]
+async fn drop_end() {
+    let ((client_tx, client_rx), (_server_tx, mut server_rx)) = fixture();
+    drop(client_tx);
+    drop(client_rx);
+
+    let mut buf = BytesMut::new();
+    let err = server_rx.read(&mut buf).await.expect_err("Read failure");
+    assert!(err.is_io());
+}
+
+#[tokio::test]
+async fn after_close() {
+    let ((mut client_tx, mut client_rx), (_server_tx, mut server_rx)) = fixture();
+    let reason = CloseReason::new(CloseCode::Normal, None);
+
+    client_tx
+        .close(reason.clone())
+        .await
+        .expect("Close failure");
+    client_tx
+        .write_ping(&[])
+        .await
+        .expect_err("Expected a write failure");
+
+    let mut buf = BytesMut::new();
+    let message = server_rx.read(&mut buf).await.expect("Read failure");
+
+    assert_eq!(message, Message::Close(Some(reason.clone())));
+    assert!(buf.is_empty());
+
+    let error = client_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a close error");
+    assert!(error.is_close());
+
+    let source = error.downcast_ref::<CloseCause>().unwrap();
+    assert_eq!(source, &CloseCause::Stopped);
+}
+
+#[tokio::test]
+async fn close_code_disagreement() {
+    let ((client_tx, mut client_rx), (server_tx, mut server_rx)) = fixture();
+
+    {
+        let WriteHalf {
+            split_writer,
+            writer,
+            ..
+        } = &mut *client_tx.split_writer.lock().await;
+        write_close(
+            split_writer,
+            writer,
+            CloseReason::new(CloseCode::Normal, None),
+            false,
+        )
+        .await
+        .expect("Write failure");
+    }
+
+    {
+        let WriteHalf {
+            split_writer,
+            writer,
+            ..
+        } = &mut *server_tx.split_writer.lock().await;
+        write_close(
+            split_writer,
+            writer,
+            CloseReason::new(CloseCode::Protocol, None),
+            true,
+        )
+        .await
+        .expect("Write failure");
+    }
+
+    let mut buf = BytesMut::new();
+    let message = client_rx.read(&mut buf).await.expect("Read failure");
+    assert_eq!(
+        message,
+        Message::Close(Some(CloseReason::new(CloseCode::Protocol, None)))
+    );
+
+    let message = server_rx.read(&mut buf).await.expect("Read failure");
+    assert_eq!(
+        message,
+        Message::Close(Some(CloseReason::new(CloseCode::Normal, None)))
+    );
+}
+
+#[tokio::test]
+async fn read_before_close() {
+    let ((mut client_tx, mut client_rx), (_server_tx, mut server_rx)) = fixture();
+    let reason = CloseReason::new(CloseCode::Normal, Some("reason".to_string()));
+
+    server_rx
+        .close(reason.clone())
+        .await
+        .expect("Write failure");
+
+    for i in 0..5 {
+        client_tx
+            .write_text(i.to_string())
+            .await
+            .expect("Write failure");
+    }
+
+    let mut buf = BytesMut::new();
+    let message = client_rx.read(&mut buf).await.expect("Read failure");
+
+    assert_eq!(message, Message::Close(Some(reason)));
+
+    let mut buf = BytesMut::new();
+
+    for _ in 0..5 {
+        let message = server_rx.read(&mut buf).await.expect("Read failure");
+        assert_eq!(message, Message::Text);
+    }
+
+    let err = server_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a nominal closure");
+
+    assert!(err.is_close())
+}
+
+#[tokio::test]
+async fn close_then_err() {
+    let ((mut client_tx, mut client_rx), (server_tx, server_rx)) = fixture();
+    client_tx
+        .close(CloseReason::new(CloseCode::Normal, None))
+        .await
+        .expect("Write error");
+    drop(server_tx);
+    drop(server_rx);
+
+    let mut buf = BytesMut::new();
+    client_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a broken connection");
+}
+
+#[tokio::test]
+async fn reuse_after_closure() {
+    let ((mut client_tx, mut client_rx), (_server_tx, mut server_rx)) = fixture();
+    let reason = CloseReason::new(CloseCode::Normal, None);
+
+    client_tx
+        .close(reason.clone())
+        .await
+        .expect("Write failure");
+
+    let mut buf = BytesMut::new();
+    let message = server_rx.read(&mut buf).await.expect("Read failure");
+
+    assert_eq!(message, Message::Close(Some(reason.clone())));
+    assert!(buf.is_empty());
+
+    let err = client_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a read failure");
+    assert!(err.is_close());
+    assert_eq!(
+        err.downcast_ref::<CloseCause>().unwrap(),
+        &CloseCause::Stopped
+    );
+
+    let err = client_rx
+        .read(&mut buf)
+        .await
+        .expect_err("Expected a read failure");
+    assert!(err.is_close());
+    assert_eq!(
+        err.downcast_ref::<CloseCause>().unwrap(),
+        &CloseCause::Error
+    );
 }
