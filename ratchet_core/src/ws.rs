@@ -298,9 +298,11 @@ where
     }
 
     /// Close this WebSocket with the reason provided.
+    ///
+    /// If the WebSocket is already closed then `Ok(())` is returned.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+            return Ok(());
         }
 
         self.close_state = CloseState::Closing;

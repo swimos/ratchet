@@ -356,10 +356,12 @@ where
         .await
     }
 
-    /// Close this Sender with the reason provided.    
+    /// Close this WebSocket with the reason provided.
+    ///
+    /// If the WebSocket is already closed then `Ok(())` is returned.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+            return Ok(());
         }
 
         self.close_state.store(STATE_CLOSING, Ordering::SeqCst);
@@ -497,10 +499,12 @@ where
         };
     }
 
-    /// Close this Sender with the reason provided.    
+    /// Close this WebSocket with the reason provided.
+    ///
+    /// If the WebSocket is already closed then `Ok(())` is returned.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
-            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+            return Ok(());
         }
 
         self.close_state.store(STATE_CLOSING, Ordering::SeqCst);
