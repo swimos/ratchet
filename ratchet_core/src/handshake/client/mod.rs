@@ -384,7 +384,7 @@ where
             digest.update(expected_nonce);
             digest.update(ACCEPT_KEY);
 
-            let expected = base64::encode(&digest.finalize());
+            let expected = base64::encode(digest.finalize());
             if expected.as_bytes() != actual {
                 Err(Error::with_cause(ErrorKind::Http, HttpError::KeyMismatch))
             } else {

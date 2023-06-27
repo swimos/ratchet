@@ -228,7 +228,7 @@ impl MockPeer {
         let mut buf = BytesMut::new();
         readable.read(&mut buf);
 
-        self.write_all(&*buf).await
+        self.write_all(&buf).await
     }
 
     /// Write `response` in to this peer's output buffer. This will **not** write the `extensions`

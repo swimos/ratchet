@@ -287,7 +287,7 @@ async fn ok_nonce() {
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(&digest.finalize());
+        let sec_websocket_accept = base64::encode(digest.finalize());
 
         let response = Response::builder()
             .version(Version::HTTP_11)
@@ -417,7 +417,7 @@ where
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(&digest.finalize());
+        let sec_websocket_accept = base64::encode(digest.finalize());
 
         let mut response = Response::builder()
             .version(Version::HTTP_11)
@@ -601,7 +601,7 @@ where
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(&digest.finalize());
+        let sec_websocket_accept = base64::encode(digest.finalize());
 
         let mut response = Response::builder()
             .version(Version::HTTP_11)
