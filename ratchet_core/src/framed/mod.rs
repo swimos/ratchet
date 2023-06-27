@@ -60,15 +60,12 @@ bitflags::bitflags! {
 }
 
 // todo: this could be reworked to save space as it's 64 bytes
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub enum FrameDecoder {
     #[default]
     DecodingHeader,
     DecodingPayload(FrameHeader, usize, usize),
 }
-
-
 
 pub enum DecodeResult {
     Incomplete(usize),
