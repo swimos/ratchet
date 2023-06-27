@@ -248,7 +248,7 @@ where
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(&digest.finalize());
+        let sec_websocket_accept = base64::encode(digest.finalize());
         headers.insert(
             http::header::SEC_WEBSOCKET_ACCEPT,
             HeaderValue::try_from(sec_websocket_accept)?,

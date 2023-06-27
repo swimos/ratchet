@@ -96,16 +96,12 @@ where
     }
 }
 
-fn fixture() -> (
-    (
-        Sender<DuplexStream, NoExtEncoder>,
-        Receiver<DuplexStream, NoExtDecoder>,
-    ),
-    (
-        Sender<DuplexStream, NoExtEncoder>,
-        Receiver<DuplexStream, NoExtDecoder>,
-    ),
-) {
+type Channel = (
+    Sender<DuplexStream, NoExtEncoder>,
+    Receiver<DuplexStream, NoExtDecoder>,
+);
+
+fn fixture() -> (Channel, Channel) {
     let (server, client) = duplex(512);
     let config = WebSocketConfig::default();
 

@@ -35,7 +35,7 @@ pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffe
     } = request;
 
     let nonce = rand::random::<[u8; 16]>();
-    encode_config_slice(&nonce, base64::STANDARD, nonce_buffer);
+    encode_config_slice(nonce, base64::STANDARD, nonce_buffer);
     let nonce_str = std::str::from_utf8(nonce_buffer).expect("Invalid UTF8");
 
     let request = format!(

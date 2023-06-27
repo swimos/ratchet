@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_rs"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 description = "Async WebSocket implementation"
@@ -17,9 +17,9 @@ split = ["ratchet_core/split"]
 fixture = ["ratchet_core/fixture"]
 
 [dependencies]
-ratchet_core = { version = "0.3.0", path = "../ratchet_core" }
-ratchet_ext = { version = "0.3.0", path = "../ratchet_ext" }
-ratchet_deflate = { version = "0.3.0", path = "../ratchet_deflate", optional = true }
+ratchet_core = { version = "0.4.0", path = "../ratchet_core" }
+ratchet_ext = { version = "0.4.0", path = "../ratchet_ext" }
+ratchet_deflate = { version = "0.4.0", path = "../ratchet_deflate", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.1.1", features = ["rt-multi-thread", "macros", "test-util"] }

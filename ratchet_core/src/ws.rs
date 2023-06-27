@@ -184,7 +184,7 @@ where
             ..
         } = self;
 
-        return match framed.read_next(read_buffer, extension).await {
+        match framed.read_next(read_buffer, extension).await {
             Ok(item) => match item {
                 Item::Binary => Ok(Message::Binary),
                 Item::Text => Ok(Message::Text),
@@ -216,7 +216,7 @@ where
                 error!("WebSocket read failure: {:?}", e);
                 close(close_state, framed, None, Some(e)).await
             }
-        };
+        }
     }
 
     /// Constructs a new text WebSocket message with a payload of `data`.

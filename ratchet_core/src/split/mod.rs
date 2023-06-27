@@ -428,7 +428,7 @@ where
         } = framed;
         let is_server = role.is_server();
 
-        return match read_next(
+        match read_next(
             read_half,
             reader,
             flags,
@@ -496,7 +496,7 @@ where
                 )
                 .await
             }
-        };
+        }
     }
 
     /// Close this WebSocket with the reason provided.
