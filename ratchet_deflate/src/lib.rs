@@ -19,29 +19,31 @@
 
 #![deny(missing_docs, missing_debug_implementations)]
 
+use std::cmp::Ordering;
+use std::convert::TryFrom;
+
+use bytes::BytesMut;
+pub use flate2::Compression;
+use flate2::{Compress, Decompress, FlushCompress, FlushDecompress, Status};
+use thiserror::Error;
+
+pub use error::DeflateExtensionError;
+use ratchet_ext::{
+    Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader, Header,
+    HeaderMap, HeaderValue, OpCode, ReunitableExtension, RsvBits, SplittableExtension,
+};
+
+use crate::codec::{BufCompress, BufDecompress};
+use crate::handshake::{
+    apply_headers, negotiate_client, negotiate_server, InitialisedDeflateConfig,
+};
+
 #[cfg(test)]
 mod tests;
 
 mod codec;
 mod error;
 mod handshake;
-
-use crate::codec::{BufCompress, BufDecompress};
-use crate::handshake::{
-    apply_headers, negotiate_client, negotiate_server, InitialisedDeflateConfig,
-};
-use bytes::BytesMut;
-use flate2::{Compress, Decompress, FlushCompress, FlushDecompress, Status};
-use ratchet_ext::{
-    Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader, Header,
-    HeaderMap, HeaderValue, OpCode, ReunitableExtension, RsvBits, SplittableExtension,
-};
-use std::cmp::Ordering;
-use std::convert::TryFrom;
-use thiserror::Error;
-
-pub use error::DeflateExtensionError;
-pub use flate2::Compression;
 
 const DEFLATE_TRAILER: [u8; 4] = [0, 0, 255, 255];
 
@@ -187,55 +189,20 @@ pub struct DeflateConfig {
     /// The client's LZ77 sliding window size. Negotiated during the HTTP upgrade. In client mode,
     /// this conforms to RFC 7692 7.1.2.1. In server mode, this conforms to RFC 7692 7.1.2.2. Must
     /// be in range 8..15 inclusive.
-    server_max_window_bits: WindowBits,
+    pub server_max_window_bits: WindowBits,
     /// The client's LZ77 sliding window size. Negotiated during the HTTP upgrade. In client mode,
     /// this conforms to RFC 7692 7.1.2.2. In server mode, this conforms to RFC 7692 7.1.2.2. Must
     /// be in range 8..15 inclusive.
-    client_max_window_bits: WindowBits,
+    pub client_max_window_bits: WindowBits,
     /// Request that the server resets the LZ77 sliding window between messages - RFC 7692 7.1.1.1.
-    request_server_no_context_takeover: bool,
+    pub request_server_no_context_takeover: bool,
     /// Request that the server resets the LZ77 sliding window between messages - RFC 7692 7.1.1.1.
-    request_client_no_context_takeover: bool,
+    pub request_client_no_context_takeover: bool,
     /// Whether to accept `no_context_takeover`.
-    accept_no_context_takeover: bool,
+    pub accept_no_context_takeover: bool,
     /// The active compression level. The integer here is typically on a scale of 0-9 where 0 means
     /// "no compression" and 9 means "take as long as you'd like".
-    compression_level: Compression,
-}
-
-#[allow(missing_docs)]
-impl DeflateConfig {
-    /// Initialises a default deflate configuration using the provided compression level.
-    pub fn for_compression_level(compression_level: Compression) -> DeflateConfig {
-        DeflateConfig {
-            compression_level,
-            ..Default::default()
-        }
-    }
-
-    pub fn server_max_window_bits(&self) -> WindowBits {
-        self.server_max_window_bits
-    }
-
-    pub fn client_max_window_bits(&self) -> WindowBits {
-        self.client_max_window_bits
-    }
-
-    pub fn request_server_no_context_takeover(&self) -> bool {
-        self.request_server_no_context_takeover
-    }
-
-    pub fn request_client_no_context_takeover(&self) -> bool {
-        self.request_client_no_context_takeover
-    }
-
-    pub fn accept_no_context_takeover(&self) -> bool {
-        self.accept_no_context_takeover
-    }
-
-    pub fn compression_level(&self) -> Compression {
-        self.compression_level
-    }
+    pub compression_level: Compression,
 }
 
 impl Default for DeflateConfig {
