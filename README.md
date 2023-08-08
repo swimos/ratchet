@@ -12,6 +12,9 @@ Ratchet has not been production tested yet, so use at your own risk and please r
 [crates-badge]: https://img.shields.io/crates/v/ratchet_rs.svg
 [crates-url]: https://crates.io/crates/ratchet_rs
 
+[Documentation](https://docs.rs/ratchet_rs/latest/ratchet_rs/)
+
+
 # Features
 - Implement your own extensions using [ratchet_ext](/ratchet_ext).
 - Per-message deflate with [ratchet_deflate](/ratchet_deflate) or enable with the `deflate`
