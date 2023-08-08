@@ -239,7 +239,11 @@ impl<'l, 'h, 'buf: 'h> TryMap<Request> for &'l httparse::Request<'h, 'buf> {
         let mut request = Request::new(());
         let path = match self.path {
             Some(path) => path.parse()?,
-            None => return Err(HttpError::MalformattedUri(None)),
+            None => {
+                return Err(HttpError::MalformattedUri(Some(
+                    "Missing request path".to_string(),
+                )))
+            }
         };
         let headers = &self.headers;
 

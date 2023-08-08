@@ -203,13 +203,18 @@ where
 
     let host = uri
         .authority()
-        .ok_or_else(|| Error::with_cause(ErrorKind::Http, HttpError::MalformattedUri(None)))?
+        .ok_or_else(|| {
+            Error::with_cause(
+                ErrorKind::Http,
+                HttpError::MalformattedUri(Some("Missing authority".to_string())),
+            )
+        })?
         .to_string();
 
     let path_and_query = uri
         .path_and_query()
-        .ok_or_else(|| Error::with_cause(ErrorKind::Http, HttpError::MalformattedUri(None)))?
-        .to_string();
+        .map(ToString::to_string)
+        .unwrap_or("/".to_string());
 
     Ok(ValidatedRequest {
         version,
