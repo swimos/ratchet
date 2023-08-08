@@ -6,6 +6,12 @@ Ratchet is a fast, robust, lightweight and fully asynchronous implementation of 
 
 Ratchet has not been production tested yet, so use at your own risk and please report any issues that you have.
 
+
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/ratchet_rs.svg
+[crates-url]: https://crates.io/crates/ratchet_rs
+
 # Features
 - Implement your own extensions using [ratchet_ext](/ratchet_ext).
 - Per-message deflate with [ratchet_deflate](/ratchet_deflate) or enable with the `deflate`
