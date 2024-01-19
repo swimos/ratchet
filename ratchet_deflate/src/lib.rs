@@ -420,6 +420,9 @@ impl ExtensionDecoder for DeflateDecoder {
         payload: &mut BytesMut,
         header: &mut FrameHeader,
     ) -> Result<(), Self::Error> {
+        if !header.rsv1 {
+            return Ok(());
+        }
         let DeflateDecoder {
             buf,
             decompress,
