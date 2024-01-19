@@ -33,7 +33,7 @@ use tokio::io::AsyncRead;
 use tokio_util::codec::Decoder;
 use url::Url;
 
-pub use client::{subscribe, subscribe_with, HandshakeResult, UpgradedClient};
+pub use client::{subscribe, subscribe_with, UpgradedClient};
 pub use server::{accept, accept_with, UpgradedServer, WebSocketResponse, WebSocketUpgrader};
 pub use subprotocols::*;
 
