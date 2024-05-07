@@ -69,7 +69,7 @@ sec-websocket-key: {nonce}",
     if let Some((name, value)) = &ext {
         len += name.len() + value.len() + 2;
     }
-    if let Some((name, value)) = &ext {
+    if let Some((name, value)) = &auth {
         len += name.len() + value.len() + 2;
     }
 
