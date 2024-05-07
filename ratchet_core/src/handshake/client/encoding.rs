@@ -58,11 +58,15 @@ sec-websocket-key: {nonce}",
     let origin = write_header(&headers, header::ORIGIN);
     let protocol = write_header(&headers, header::SEC_WEBSOCKET_PROTOCOL);
     let ext = write_header(&headers, header::SEC_WEBSOCKET_EXTENSIONS);
+    let auth = write_header(&headers, header::AUTHORIZATION);
 
     if let Some((name, value)) = &origin {
         len += name.len() + value.len() + 2;
     }
     if let Some((name, value)) = &protocol {
+        len += name.len() + value.len() + 2;
+    }
+    if let Some((name, value)) = &ext {
         len += name.len() + value.len() + 2;
     }
     if let Some((name, value)) = &ext {
@@ -83,6 +87,11 @@ sec-websocket-key: {nonce}",
         dst.put_slice(value);
     }
     if let Some((name, value)) = ext {
+        dst.put_slice(b"\r\n");
+        dst.put_slice(name.as_bytes());
+        dst.put_slice(value);
+    }
+    if let Some((name, value)) = auth {
         dst.put_slice(b"\r\n");
         dst.put_slice(name.as_bytes());
         dst.put_slice(value);
