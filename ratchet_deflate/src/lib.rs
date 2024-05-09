@@ -428,8 +428,8 @@ impl ExtensionDecoder for DeflateDecoder {
         } = self;
 
         match header.opcode {
-            OpCode::Binary | OpCode::Text => {
-                *compressed = header.rsv1;
+            OpCode::Binary | OpCode::Text if header.rsv1 => {
+                *compressed = true;
                 if !header.fin {
                     return Ok(());
                 }
