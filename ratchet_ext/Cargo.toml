@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_ext"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 description = "WebSocket extensions for Ratchet"
