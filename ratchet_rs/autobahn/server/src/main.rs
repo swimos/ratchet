@@ -127,13 +127,26 @@ fn validate_results() -> Result<()> {
                 .as_object()
                 .expect("Invalid result structure");
 
-            for (_, test) in ratchet_results {
+            let mut failures = Vec::new();
+
+            for (test_id, test) in ratchet_results {
                 match test {
                     Value::Object(object) => match object["behavior"].as_str() {
                         Some(result) if result == "OK" => {}
+                        Some(result) => {
+                            failures.push(format!("Test {test_id} failed with: {result}"));
+                        }
                         _ => bail!("Invalid results structure"),
                     },
                     _ => bail!("Invalid results structure"),
+                }
+            }
+
+            if !failures.is_empty() {
+                println!("Test suite encountered failures:");
+
+                for test in failures {
+                    println!("\t{test}");
                 }
             }
         }
