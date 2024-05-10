@@ -7,6 +7,7 @@ members = [
     "ratchet_rs",
     "ratchet_rs/autobahn/client",
     "ratchet_rs/autobahn/server",
+    "ratchet_rs/autobahn/utils",
 ]
 
 [workspace.dependencies]
@@ -29,3 +30,5 @@ bitflags = "1.2"
 either = "1.5.3"
 log = "0.4.14"
 flate2 = "1.0"
+anyhow = "1.0"
+serde_json = "1.0"
