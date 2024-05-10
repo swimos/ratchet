@@ -13,7 +13,7 @@ repository = "https://github.com/swimos/ratchet/"
 [dependencies]
 ratchet_ext = { version = "0.4.2", path = "../ratchet_ext" }
 thiserror = "1.0"
-http = "0.2.3"
+http = "1.1.0"
 bytes = "1.0"
 flate2 = { version = "1.0", default-features = false, features = ["zlib"] }
 log = "0.4.14"
