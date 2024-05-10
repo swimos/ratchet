@@ -62,7 +62,7 @@ fn docker_command() -> Result<Command> {
             "linux/amd64",
             "--name",
             "fuzzingserver",
-            "crossbario/autobahn-testsuite",
+            "crossbario/autobahn-testsuite:0.8.2",
             "wstest",
             "-m",
             "fuzzingserver",

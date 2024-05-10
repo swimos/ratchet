@@ -48,7 +48,7 @@ fn docker_command() -> Result<Command> {
             "host",
             "--platform",
             "linux/amd64",
-            "crossbario/autobahn-testsuite",
+            "crossbario/autobahn-testsuite:0.8.2",
             "wstest",
             "-m",
             "fuzzingclient",
