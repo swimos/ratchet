@@ -144,11 +144,13 @@ fn validate_results() -> Result<()> {
             }
 
             if !failures.is_empty() {
-                println!("Test suite encountered failures:");
+                eprintln!("Autobahn test suite encountered failures:");
 
                 for test in failures {
-                    println!("\t{test}");
+                    eprintln!("\t{test}");
                 }
+
+                bail!("Autobahn test suite failure")
             }
         }
         _ => bail!("Invalid results structure"),
