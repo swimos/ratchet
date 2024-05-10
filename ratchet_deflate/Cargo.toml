@@ -9,11 +9,12 @@ categories = ["network-programming", "asynchronous", "web-programming::websocket
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
+rust-version = "1.64"
 
 [dependencies]
 ratchet_ext = { version = "0.4.2", path = "../ratchet_ext" }
-thiserror = "1.0"
-http = "0.2.3"
-bytes = "1.0"
-flate2 = { version = "1.0", default-features = false, features = ["zlib"] }
-log = "0.4.14"
+thiserror = { workspace = true }
+http = { workspace = true }
+bytes = { workspace = true }
+flate2 = { workspace = true, default-features = false, features = ["zlib"] }
+log = { workspace = true }

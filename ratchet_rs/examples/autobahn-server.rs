@@ -23,13 +23,7 @@ async fn main() {
     let listener = TcpListener::bind(&addr).await.unwrap();
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept(stream));
-    }
-}
-
-async fn accept(stream: TcpStream) {
-    if let Err(e) = run(stream).await {
-        println!("{:?}", e);
+        tokio::spawn(run(stream));
     }
 }
 

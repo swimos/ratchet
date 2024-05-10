@@ -33,7 +33,7 @@ use std::convert::TryFrom;
 use std::fmt::{Debug, Formatter};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Item {
     Binary,
     Text,

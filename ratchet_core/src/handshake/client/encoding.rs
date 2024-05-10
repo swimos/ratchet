@@ -223,7 +223,7 @@ where
     let path_and_query = uri
         .path_and_query()
         .map(ToString::to_string)
-        .unwrap_or("/".to_string());
+        .unwrap_or_else(|| "/".to_string());
 
     Ok(ValidatedRequest {
         version,

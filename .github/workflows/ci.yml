@@ -1,4 +1,4 @@
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 name: Continuous integration
 
@@ -11,7 +11,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.62.1
           override: true
       - uses: actions-rs/cargo@v1
         with:
@@ -31,7 +31,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.62.1
           override: true
       - uses: actions-rs/cargo@v1
         with:
@@ -46,7 +46,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.62.1
           override: true
       - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
@@ -62,10 +62,40 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.62.1
           override: true
       - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: --all-features --workspace -- -D warnings
+
+  autobahnclient:
+    name: Autobahn Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.62.1
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin client --release
+
+  autobahnserver:
+    name: Autobahn Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.62.1
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin server --release

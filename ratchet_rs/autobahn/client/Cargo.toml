@@ -1,0 +1,11 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ratchet_rs = { path = "../.." }
+tokio = { workspace = true, features = ["rt-multi-thread", "process", "macros", "time"] }
+serde_json = "1.0"
+anyhow = "1.0"
+bytes = { workspace = true }

@@ -35,9 +35,6 @@ async fn subscribe(url: &str) -> Result<UpgradedClient<TcpStream, Deflate>, Erro
 }
 
 async fn get_case_count() -> Result<u32, Error> {
-    let stream = TcpStream::connect("127.0.0.1:9001").await.unwrap();
-    stream.set_nodelay(true).unwrap();
-
     let mut websocket = subscribe("ws://localhost:9001/getCaseCount")
         .await
         .unwrap()
@@ -54,7 +51,7 @@ async fn get_case_count() -> Result<u32, Error> {
 }
 
 async fn update_reports() -> Result<(), Error> {
-    let mut _websocket = subscribe(&format!(
+    let _websocket = subscribe(&format!(
         "ws://localhost:9001/updateReports?agent={}",
         AGENT
     ))
