@@ -24,7 +24,6 @@ fn docker_command() -> Result<Command> {
             "linux/amd64",
             "crossbario/autobahn-testsuite:0.8.2",
             "wstest",
-            "--debug",
             "-m",
             "fuzzingclient",
             "-s",
