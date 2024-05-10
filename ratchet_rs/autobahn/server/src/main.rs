@@ -7,7 +7,6 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio::process::Command;
-use tokio::select;
 use tokio::time::Instant;
 
 use ratchet_rs::{subscribe, WebSocketConfig};
@@ -63,7 +62,7 @@ fn docker_command() -> Result<Command> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let server_process = tokio::spawn(async move {
+    let _server_process = tokio::spawn(async move {
         cargo_command()
             .expect(PWD_ERR)
             .spawn()
@@ -74,24 +73,18 @@ async fn main() -> Result<()> {
 
     await_server_start().await?;
 
-    let mut docker_process = docker_command()?
+    let result = docker_command()?
         .spawn()
-        .context("Failed to spawn docker container")?;
+        .context("Failed to spawn docker container")?
+        .wait()
+        .await
+        .context("Autobahn suite failed")?;
 
-    tokio::pin! {
-        let server_wait = server_process;
-        let docker_wait = docker_process.wait();
+    if !result.success() {
+        bail!("Autobahn suite failed");
     }
 
-    select! {
-        _ = &mut server_wait => {
-            bail!("Server terminated before Autobahn suite completed");
-        }
-        _ = &mut docker_wait => {
-            validate_results()?;
-            println!("Autobahn suite completed");
-        }
-    }
+    validate_results()?;
 
     Ok(())
 }
