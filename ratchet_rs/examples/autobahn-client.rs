@@ -93,7 +93,7 @@ async fn main() {
     let total = get_case_count().await.unwrap();
 
     for case in 1..=total {
-        run_test(case).await;
+        let _r = run_test(case).await;
     }
 
     update_reports().await.unwrap();
