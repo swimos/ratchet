@@ -93,9 +93,7 @@ async fn main() {
     let total = get_case_count().await.unwrap();
 
     for case in 1..=total {
-        if let Err(e) = run_test(case).await {
-            println!("{}", e);
-        }
+        run_test(case).await;
     }
 
     update_reports().await.unwrap();

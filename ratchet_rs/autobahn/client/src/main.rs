@@ -8,12 +8,11 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio::process::Command;
-use tokio::time::{sleep, Instant};
+use tokio::time::Instant;
 
 use ratchet_rs::{subscribe, WebSocketConfig};
 
 const PWD_ERR: &str = "Failed to get PWD";
-const INVALID_RESULTS: &str = "Invalid results structure";
 
 fn cargo_command() -> Result<Command> {
     let mut pwd = current_dir().context(PWD_ERR)?;
@@ -99,13 +98,13 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to run autobahn client")?;
 
-    validate_results().await;
+    validate_results()?;
     kill_container().await;
 
     Ok(())
 }
 
-async fn validate_results() -> Result<()> {
+fn validate_results() -> Result<()> {
     let mut results_file = current_dir().context(PWD_ERR)?;
     results_file.push("ratchet_rs/autobahn/client/results/index.json");
 
@@ -123,13 +122,13 @@ async fn validate_results() -> Result<()> {
                 match test {
                     Value::Object(object) => match object["behavior"].as_str() {
                         Some(result) if result == "OK" => {}
-                        _ => bail!(INVALID_RESULTS),
+                        _ => bail!("Invalid results structure"),
                     },
-                    _ => bail!(INVALID_RESULTS),
+                    _ => bail!("Invalid results structure"),
                 }
             }
         }
-        _ => bail!(INVALID_RESULTS),
+        _ => bail!("Invalid results structure"),
     }
 
     Ok(())
