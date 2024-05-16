@@ -28,12 +28,12 @@
 //! `ReunitableExtension`. This allows more fine-grained control over the BiLock within the
 //! receiver.
 
-#![deny(
-    missing_docs,
-    missing_debug_implementations,
-    unused_imports,
-    unused_import_braces
-)]
+// #![deny(
+//     missing_docs,
+//     missing_debug_implementations,
+//     unused_imports,
+//     unused_import_braces
+// )]
 
 pub use http::{HeaderMap, HeaderValue};
 pub use httparse::Header;

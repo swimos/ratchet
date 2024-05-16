@@ -21,6 +21,7 @@ use crate::protocol::{
     MessageType, OpCode, Role,
 };
 use crate::protocol::{BorrowedFramePrinter, FramePrinter};
+use crate::ws::CONTROL_MAX_SIZE;
 use crate::WebSocketStream;
 use bytes::Buf;
 use bytes::{BufMut, BytesMut};
@@ -159,7 +160,9 @@ impl FramedRead {
                     read_buffer.resize(len + count, 0u8);
                     io.read_exact(&mut read_buffer[len..]).await?;
                 }
-                DecodeResult::Finished(header, payload) => return Ok((header, payload)),
+                DecodeResult::Finished(header, payload) => {
+                    return Ok((header, payload));
+                }
             }
         }
     }
@@ -186,7 +189,7 @@ impl FramedRead {
             let (header, payload) = self
                 .read_frame(io, is_server, rsv_bits, max_message_size)
                 .await?;
-            trace!("Read frame: {}", FramePrinter(&header));
+            // trace!("Read frame: {}", FramePrinter(&header));
 
             match header.opcode {
                 OpCode::DataCode(data_code) => {
@@ -277,33 +280,45 @@ impl FramedRead {
                     }
                 }
                 OpCode::ControlCode(c) => {
+                    if payload.len() > CONTROL_MAX_SIZE {
+                        return Err(ProtocolError::FrameOverflow.into());
+                    }
+
                     return match c {
                         ControlCode::Close => {
-                            let reason = if payload.len() < 2 {
-                                None
-                            } else {
-                                match CloseCode::try_from([payload[0], payload[1]])? {
-                                    close_code if close_code.is_illegal() => {
-                                        return Err(
-                                            ProtocolError::CloseCode(u16::from(close_code)).into()
-                                        )
-                                    }
-                                    close_code => {
-                                        let close_reason =
-                                            std::str::from_utf8(&payload[2..])?.to_string();
-                                        let description = if close_reason.is_empty() {
-                                            None
-                                        } else {
-                                            Some(close_reason)
-                                        };
+                            let reason = match payload.len() {
+                                0 => None,
+                                1 => {
+                                    return Err(ProtocolError::InvalidControlFrame.into());
+                                }
+                                2..=CONTROL_MAX_SIZE => {
+                                    let close_reason =
+                                        std::str::from_utf8(&payload[2..])?.to_string();
+                                    match CloseCode::try_from([payload[0], payload[1]])? {
+                                        close_code if close_code.is_illegal() => {
+                                            return Err(ProtocolError::CloseCode(u16::from(
+                                                close_code,
+                                            ))
+                                            .into())
+                                        }
+                                        close_code => {
+                                            trace!("Close reason len: {}", close_reason.len());
+                                            let description = if close_reason.is_empty() {
+                                                None
+                                            } else {
+                                                Some(close_reason)
+                                            };
 
-                                        let reason = CloseReason::new(close_code, description);
+                                            let reason = CloseReason::new(close_code, description);
 
-                                        Some(reason)
+                                            Some(reason)
+                                        }
                                     }
                                 }
+                                _ => {
+                                    return Err(ProtocolError::FrameOverflow.into());
+                                }
                             };
-
                             Ok(Item::Close(reason))
                         }
                         ControlCode::Ping => {
@@ -387,10 +402,10 @@ impl FramedWrite {
             Some(mask)
         };
 
-        trace!(
-            "Writing frame: {}",
-            BorrowedFramePrinter::new(&opcode, &header_flags, &mask),
-        );
+        // trace!(
+        //     "Writing frame: {}",
+        //     BorrowedFramePrinter::new(&opcode, &header_flags, &mask),
+        // );
 
         FrameHeader::write_into(
             write_buffer,
@@ -404,7 +419,9 @@ impl FramedWrite {
         write_buffer.clear();
 
         io.write_all(payload_bytes.as_ref()).await?;
-        io.flush().await.map_err(Into::into)
+        io.flush().await?;
+
+        Ok(())
     }
 }
 
@@ -569,6 +586,7 @@ where
     }
 
     pub async fn close(&mut self) {
+        let _r = self.io.flush().await;
         let _r = self.io.shutdown().await;
     }
 }

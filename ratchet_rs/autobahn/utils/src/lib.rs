@@ -28,7 +28,8 @@ pub fn cargo_command(example: &str) -> Result<Command> {
         "--features",
         "deflate",
     ])
-    .current_dir(pwd);
+    .current_dir(pwd)
+    .env("RUST_BACKTRACE", "FULL");
 
     Ok(cmd)
 }
@@ -96,12 +97,18 @@ pub async fn await_server_start(port: u64) -> Result<()> {
 }
 
 async fn await_handshake(port: u64) -> Result<(), ratchet_rs::Error> {
+    println!("Awaiting handshake");
     let stream = TcpStream::connect(format!("127.0.0.1:{port}")).await?;
-    subscribe(
+    println!("Opened TCP stream");
+    let r = subscribe(
         WebSocketConfig::default(),
         stream,
-        "ws://localhost:9001/getCaseCount",
+        format!("ws://localhost:{port}/getCaseCount"),
     )
     .await
-    .map(|_| ())
+    .map(|w| {
+        println!("Client upgraded");
+    });
+    println!("Handshake result: {r:?}");
+    r
 }

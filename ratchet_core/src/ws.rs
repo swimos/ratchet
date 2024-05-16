@@ -19,7 +19,7 @@ use crate::protocol::{
     CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
     Role,
 };
-use crate::{WebSocketConfig, WebSocketStream};
+use crate::{CloseCode, WebSocketConfig, WebSocketStream};
 use bytes::BytesMut;
 use log::{error, trace};
 use ratchet_ext::{Extension, ExtensionEncoder, FrameHeader as ExtFrameHeader};
@@ -86,7 +86,7 @@ pub struct WebSocket<S, E> {
 pub enum CloseState {
     /// The session is active.
     NotClosed,
-    /// Either a user or peer requested closure of the session has been requested.
+    /// User requested closure of the session. WebSocket is awaiting the close frame to be echoed.
     Closing,
     /// The WebSocket session is closed.
     Closed,
@@ -185,33 +185,37 @@ where
         } = self;
 
         match framed.read_next(read_buffer, extension).await {
-            Ok(item) => match item {
-                Item::Binary => Ok(Message::Binary),
-                Item::Text => Ok(Message::Text),
-                Item::Ping(payload) => {
-                    trace!("Received a ping frame. Responding with pong");
-                    let ret = payload.clone().freeze();
-                    framed
-                        .write(
-                            OpCode::ControlCode(ControlCode::Pong),
-                            HeaderFlags::FIN,
-                            payload,
-                            |_, _| Ok(()),
-                        )
-                        .await?;
-                    Ok(Message::Ping(ret))
-                }
-                Item::Pong(payload) => {
-                    if control_buffer.is_empty() {
-                        trace!("Received an unsolicited pong frame");
-                    } else {
-                        control_buffer.clear();
-                        trace!("Received pong frame");
+            Ok(item) => {
+                trace!("Read item: {item:?}");
+
+                match item {
+                    Item::Binary => Ok(Message::Binary),
+                    Item::Text => Ok(Message::Text),
+                    Item::Ping(payload) => {
+                        trace!("Received a ping frame. Responding with pong");
+                        let ret = payload.clone().freeze();
+                        framed
+                            .write(
+                                OpCode::ControlCode(ControlCode::Pong),
+                                HeaderFlags::FIN,
+                                payload,
+                                |_, _| Ok(()),
+                            )
+                            .await?;
+                        Ok(Message::Ping(ret))
                     }
-                    Ok(Message::Pong(payload.freeze()))
+                    Item::Pong(payload) => {
+                        if control_buffer.is_empty() {
+                            // trace!("Received an unsolicited pong frame");
+                        } else {
+                            control_buffer.clear();
+                            // trace!("Received pong frame");
+                        }
+                        Ok(Message::Pong(payload.freeze()))
+                    }
+                    Item::Close(reason) => close(close_state, framed, reason, None).await,
                 }
-                Item::Close(reason) => close(close_state, framed, reason, None).await,
-            },
+            }
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
                 close(close_state, framed, None, Some(e)).await
@@ -384,16 +388,24 @@ async fn close<S>(
 where
     S: WebSocketStream,
 {
+    trace!("Start close fn. Reason {reason:?}, return with {ret:?}");
+
     let server = framed.is_server();
     match *close_state {
         CloseState::NotClosed => {
-            let mut code = match &reason {
-                Some(reason) => u16::from(reason.code).to_be_bytes(),
-                None => [0; 2],
+            let mut code = match (&reason, &ret) {
+                (Some(reason), None) => u16::from(reason.code).to_be_bytes(),
+                (None, Some(error)) if error.is_protocol() | error.is_encoding() => {
+                    u16::from(CloseCode::Protocol).to_be_bytes()
+                }
+                (Some(reason), Some(_)) => u16::from(reason.code).to_be_bytes(),
+                _ => u16::from(CloseCode::Normal).to_be_bytes(),
             };
 
             // we don't want to immediately await the echoed close frame as the peer may elect to
             // drain any pending messages **before** echoing the close frame
+
+            trace!("Close send frame");
 
             let write_result = framed
                 .write(
@@ -403,19 +415,22 @@ where
                     |_, _| Ok(()),
                 )
                 .await;
-            match write_result {
-                Ok(()) => *close_state = CloseState::Closing,
-                Err(_) => {
-                    if server {
-                        // 7.1.1: the TCP stream should be closed first by the server
-                        //
-                        // We aren't interested in any IO errors produced here as the peer *may* have
-                        // already closed the TCP stream.
-                        framed.close().await;
-                    }
-                    *close_state = CloseState::Closed;
-                }
+
+            trace!("Write result: {write_result:?}");
+
+            if server {
+                trace!("Closing IO");
+
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                framed.close().await;
+                trace!("IO closed");
             }
+
+            *close_state = CloseState::Closed;
+
             match ret {
                 Some(err) => Err(err),
                 None => Ok(Message::Close(reason)),
@@ -424,6 +439,8 @@ where
         CloseState::Closing => {
             *close_state = CloseState::Closed;
             if server {
+                trace!("If server 2");
+
                 // 7.1.1: the TCP stream should be closed first by the server
                 //
                 // We aren't interested in any IO errors produced here as the peer *may* have

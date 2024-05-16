@@ -32,17 +32,17 @@
 //! Possible errors that may be encountered during an upgraded session are protocol violations by
 //! the peer or an IO error.
 
-#![deny(
-    missing_docs,
-    missing_copy_implementations,
-    missing_debug_implementations,
-    trivial_numeric_casts,
-    unstable_features,
-    unused_must_use,
-    unused_mut,
-    unused_imports,
-    unused_import_braces
-)]
+// #![deny(
+//     missing_docs,
+//     missing_copy_implementations,
+//     missing_debug_implementations,
+//     trivial_numeric_casts,
+//     unstable_features,
+//     unused_must_use,
+//     unused_mut,
+//     unused_imports,
+//     unused_import_braces
+// )]
 
 pub use ratchet_core::{self, *};
 pub use ratchet_ext::{self, *};

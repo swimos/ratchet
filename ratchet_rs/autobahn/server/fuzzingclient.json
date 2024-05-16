@@ -9,6 +9,7 @@
   "cases": [
     "*"
   ],
-  "exclude-cases": [],
+  "exclude-cases": [
+  ],
   "exclude-agent-cases": {}
 }

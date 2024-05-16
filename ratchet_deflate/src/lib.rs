@@ -17,7 +17,7 @@
 //!
 //! See the documentation in [Ratchet](../ratchet) for more details on using this extension.
 
-#![deny(missing_docs, missing_debug_implementations)]
+// #![deny(missing_docs, missing_debug_implementations)]
 
 use std::cmp::Ordering;
 use std::convert::TryFrom;

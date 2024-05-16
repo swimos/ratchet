@@ -1,4 +1,6 @@
 use std::env::current_dir;
+use std::process::Stdio;
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use tokio::process::Command;
@@ -30,7 +32,9 @@ fn docker_command() -> Result<Command> {
         ])
         // spec is now available at this directory due to how the host directory was mounted
         .arg("autobahn/fuzzingclient.json")
-        .current_dir(pwd);
+        .current_dir(pwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
 
     Ok(cmd)
 }

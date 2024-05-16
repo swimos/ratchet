@@ -282,7 +282,7 @@ where
 
         buf.clear();
 
-        trace!("{} from {}", UPGRADED_MSG, request.uri());
+        // trace!("{} from {}", UPGRADED_MSG, request.uri());
 
         Ok(UpgradedServer {
             request,
@@ -304,7 +304,7 @@ where
             ..
         } = self;
 
-        trace!("{} from {}", REJECT_MSG, request.uri());
+        // trace!("{} from {}", REJECT_MSG, request.uri());
 
         write_response(&mut stream, &mut buf, status, headers, None).await
     }

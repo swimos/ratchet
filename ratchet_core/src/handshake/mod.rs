@@ -28,6 +28,7 @@ use bytes::Bytes;
 use http::header::HeaderName;
 use http::Uri;
 use http::{HeaderMap, HeaderValue};
+use log::trace;
 use std::str::FromStr;
 use tokio::io::AsyncRead;
 use tokio_util::codec::Decoder;
@@ -66,10 +67,14 @@ where
 
             match parser.decode(io.buffer) {
                 Ok(Some((out, count))) => {
+                    trace!("Decoder: advancing: {count}");
                     io.advance(count);
                     return Ok(out);
                 }
-                Ok(None) => continue,
+                Ok(None) => {
+                    trace!("Decoder none");
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }

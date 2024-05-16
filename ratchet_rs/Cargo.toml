@@ -21,6 +21,8 @@ fixture = ["ratchet_core/fixture"]
 ratchet_core = { version = "0.4.2", path = "../ratchet_core" }
 ratchet_ext = { version = "0.4.2", path = "../ratchet_ext" }
 ratchet_deflate = { version = "0.4.2", path = "../ratchet_deflate", optional = true }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+log = "0.4.19"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }

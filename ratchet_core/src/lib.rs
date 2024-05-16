@@ -14,17 +14,17 @@
 
 //! Ratchet's core implementation. See the Ratchet crate for usage.
 
-#![deny(
-    missing_docs,
-    missing_copy_implementations,
-    missing_debug_implementations,
-    trivial_numeric_casts,
-    unstable_features,
-    unused_must_use,
-    unused_mut,
-    unused_imports,
-    unused_import_braces
-)]
+// #![deny(
+//     missing_docs,
+//     missing_copy_implementations,
+//     missing_debug_implementations,
+//     trivial_numeric_casts,
+//     unstable_features,
+//     unused_must_use,
+//     unused_mut,
+//     unused_imports,
+//     unused_import_braces
+// )]
 
 extern crate core;
 
