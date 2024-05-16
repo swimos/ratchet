@@ -24,9 +24,7 @@ async fn main() {
     let listener = TcpListener::bind(&addr).await.unwrap();
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(async move {
-          run(stream).await
-        });
+        tokio::spawn(async move { run(stream).await });
     }
 }
 

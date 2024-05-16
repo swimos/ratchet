@@ -1,94 +1,101 @@
-name: CI
+on: [ pull_request ]
 
-on: [ push, pull_request ]
+name: Continuous integration
 
 jobs:
-  fmt:
-    name: Format
+  check:
+    name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          components: rustfmt
-      - run: cargo fmt --all --check
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
 
   test:
-    name: Test
-    runs-on: ubuntu-latest
-
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust:
-          - stable
-
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --workspace
 
-      - name: Install dependencies
-        run: sudo apt-get install libssl-dev
-
-      - name: Install cargo-hack
-        uses: taiki-e/install-action@cargo-hack
-
-  #      - name: Check
-  #        run: cargo hack check --feature-powerset --all-targets
-  #
-  #      - name: Test
-  #        run: cargo test --release
-
-  #  test-msvr:
-  #    name: Test MSRV
-  #    runs-on: ubuntu-latest
-  #
-  #    strategy:
-  #      matrix:
-  #        rust:
-  #          - 1.60.0
-  #
-  #    steps:
-  #      - name: Checkout sources
-  #        uses: actions/checkout@v3
-  #
-  #      - name: Install toolchain
-  #        uses: dtolnay/rust-toolchain@master
-  #        with:
-  #          toolchain: ${{ matrix.rust }}
-  #
-  #      - name: Install dependencies
-  #        run: sudo apt-get install libssl-dev
-  #
-  #      - name: Check
-  #        run: cargo check
-
-  autobahn:
-    name: Autobahn tests
+  fmt:
+    name: Rustfmt
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
-
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
 
-      #      - name: Running Autobahn TestSuite for client
-      #        run: ./scripts/autobahn-client.sh
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - run: rustup component add clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-features --workspace -- -D warnings
 
-      - name: Running Autobahn TestSuite for server
-        run: ./scripts/autobahn-server.sh
+  autobahnclient:
+    name: Autobahn Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin client --release
+
+  autobahnserver:
+    name: Autobahn Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin server --release
