@@ -442,7 +442,7 @@ where
                 Item::Binary => Ok(Message::Binary),
                 Item::Text => Ok(Message::Text),
                 Item::Ping(payload) => {
-                    // trace!("Received a ping frame. Responding with pong");
+                    trace!("Received a ping frame. Responding with pong");
 
                     let WriteHalf {
                         split_writer,
@@ -467,10 +467,10 @@ where
                     let WriteHalf { control_buffer, .. } = &mut *split_writer.lock().await;
 
                     if control_buffer.is_empty() {
-                        // trace!("Received an unsolicited pong frame");
+                        trace!("Received an unsolicited pong frame");
                     } else {
                         control_buffer.clear();
-                        // trace!("Received pong frame");
+                        trace!("Received pong frame");
                     }
                     Ok(Message::Pong(payload.freeze()))
                 }

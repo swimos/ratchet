@@ -189,7 +189,7 @@ impl FramedRead {
             let (header, payload) = self
                 .read_frame(io, is_server, rsv_bits, max_message_size)
                 .await?;
-            // trace!("Read frame: {}", FramePrinter(&header));
+            trace!("Read frame: {}", FramePrinter(&header));
 
             match header.opcode {
                 OpCode::DataCode(data_code) => {
@@ -402,10 +402,10 @@ impl FramedWrite {
             Some(mask)
         };
 
-        // trace!(
-        //     "Writing frame: {}",
-        //     BorrowedFramePrinter::new(&opcode, &header_flags, &mask),
-        // );
+        trace!(
+            "Writing frame: {}",
+            BorrowedFramePrinter::new(&opcode, &header_flags, &mask),
+        );
 
         FrameHeader::write_into(
             write_buffer,

@@ -1,6 +1,5 @@
 use std::env::current_dir;
 use std::process::Stdio;
-use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use tokio::process::Command;
@@ -17,9 +16,9 @@ fn docker_command() -> Result<Command> {
     volume_arg.push("autobahn/server:/autobahn");
 
     let mut cmd = Command::new("docker");
-    cmd.args(&["run", "--rm", "-v"])
+    cmd.args(["run", "--rm", "-v"])
         .arg(volume_arg)
-        .args(&[
+        .args([
             "--network",
             "host",
             "--platform",

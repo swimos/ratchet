@@ -10,7 +10,7 @@ const PWD_ERR: &str = "Failed to get PWD";
 
 async fn kill_container() {
     Command::new("docker")
-        .args(&["kill", "fuzzingserver"])
+        .args(["kill", "fuzzingserver"])
         .stdin(Stdio::null())
         .spawn()
         .expect("Failed to kill any lingering container")
@@ -28,9 +28,9 @@ fn docker_command() -> Result<Command> {
     volume_arg.push("autobahn/client:/autobahn");
 
     let mut cmd = Command::new("docker");
-    cmd.args(&["run", "-d", "--rm", "-v"])
+    cmd.args(["run", "-d", "--rm", "-v"])
         .arg(volume_arg)
-        .args(&[
+        .args([
             "-p",
             "9001:9001",
             "--init",

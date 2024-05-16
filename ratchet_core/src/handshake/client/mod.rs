@@ -143,13 +143,13 @@ where
             extension,
             ..
         }) => {
-            // trace!(
-            //     "{} for: {}. Selected subprotocol: {:?} and extension: {:?}",
-            //     MSG_HANDSHAKE_COMPLETED,
-            //     uri,
-            //     subprotocol,
-            //     extension
-            // )
+            trace!(
+                "{} for: {}. Selected subprotocol: {:?} and extension: {:?}",
+                MSG_HANDSHAKE_COMPLETED,
+                uri,
+                subprotocol,
+                extension
+            )
         }
         Err(e) => {
             error!("{} for {}. Error: {:?}", MSG_HANDSHAKE_FAILED, uri, e)

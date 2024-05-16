@@ -206,10 +206,10 @@ where
                     }
                     Item::Pong(payload) => {
                         if control_buffer.is_empty() {
-                            // trace!("Received an unsolicited pong frame");
+                            trace!("Received an unsolicited pong frame");
                         } else {
                             control_buffer.clear();
-                            // trace!("Received pong frame");
+                            trace!("Received pong frame");
                         }
                         Ok(Message::Pong(payload.freeze()))
                     }

@@ -20,7 +20,7 @@ pub fn cargo_command(example: &str) -> Result<Command> {
     pwd.push("ratchet_rs");
 
     let mut cmd = Command::new("cargo");
-    cmd.args(&[
+    cmd.args([
         "run",
         "--release",
         "--example",
@@ -97,18 +97,12 @@ pub async fn await_server_start(port: u64) -> Result<()> {
 }
 
 async fn await_handshake(port: u64) -> Result<(), ratchet_rs::Error> {
-    println!("Awaiting handshake");
     let stream = TcpStream::connect(format!("127.0.0.1:{port}")).await?;
-    println!("Opened TCP stream");
-    let r = subscribe(
+    subscribe(
         WebSocketConfig::default(),
         stream,
         format!("ws://localhost:{port}/getCaseCount"),
     )
     .await
-    .map(|w| {
-        println!("Client upgraded");
-    });
-    println!("Handshake result: {r:?}");
-    r
+    .map(|_| ())
 }
