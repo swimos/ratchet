@@ -9,7 +9,7 @@ categories = ["network-programming", "asynchronous", "web-programming::websocket
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
-rust-version = "1.64"
+rust-version = "1.65"
 
 [dependencies]
 ratchet_ext = { version = "0.4.2", path = "../ratchet_ext" }
