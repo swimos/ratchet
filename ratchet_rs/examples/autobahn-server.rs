@@ -23,12 +23,12 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    let f = EnvFilter::new("")
-        .add_directive("ratchet_rs=trace".parse().unwrap())
-        .add_directive("ratchet_core=trace".parse().unwrap())
-        .add_directive("ratchet_deflate=trace".parse().unwrap())
-        .add_directive(LevelFilter::TRACE.into());
-    tracing_subscriber::fmt().with_env_filter(f).init();
+    // let f = EnvFilter::new("")
+    //     .add_directive("ratchet_rs=trace".parse().unwrap())
+    //     .add_directive("ratchet_core=trace".parse().unwrap())
+    //     .add_directive("ratchet_deflate=trace".parse().unwrap())
+    //     .add_directive(LevelFilter::TRACE.into());
+    // tracing_subscriber::fmt().with_env_filter(f).init();
 
     let addr = "127.0.0.1:9002";
     let listener = TcpListener::bind(&addr).await.unwrap();
