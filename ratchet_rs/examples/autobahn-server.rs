@@ -25,7 +25,7 @@ async fn main() {
 
     while let Ok((stream, _)) = listener.accept().await {
         tokio::spawn(async move {
-            println!("Test result {:?}", run(stream).await);
+          run(stream).await
         });
     }
 }
