@@ -11,7 +11,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.64.0
+          toolchain: 1.65
           override: true
       - uses: actions-rs/cargo@v1
         with:
@@ -31,7 +31,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.64.0
+          toolchain: 1.65
           override: true
       - uses: actions-rs/cargo@v1
         with:
@@ -46,7 +46,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.64.0
+          toolchain: 1.65
           override: true
       - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
@@ -62,7 +62,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.64.0
+          toolchain: 1.65
           override: true
       - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
@@ -78,7 +78,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.64.0
+          toolchain: 1.65
           override: true
       - uses: actions-rs/cargo@v1
         with:
@@ -93,7 +93,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.64.0
+          toolchain: 1.65
           override: true
       - uses: actions-rs/cargo@v1
         with:
