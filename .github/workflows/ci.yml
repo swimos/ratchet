@@ -1,101 +1,94 @@
-on: [ pull_request ]
+name: CI
 
-name: Continuous integration
+on: [ push, pull_request ]
 
 jobs:
-  check:
-    name: Check
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
+          components: rustfmt
+      - run: cargo fmt --all --check
 
   test:
-    name: Test Suite
-    runs-on: ${{ matrix.os }}
+    name: Test
+    runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --workspace
+        rust:
+          - stable
 
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - name: Checkout sources
+        uses: actions/checkout@v3
 
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-features --workspace -- -D warnings
+          toolchain: ${{ matrix.rust }}
 
-  autobahnclient:
-    name: Autobahn Client
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin client --release
+      - name: Install dependencies
+        run: sudo apt-get install libssl-dev
 
-  autobahnserver:
-    name: Autobahn Server
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+  #      - name: Check
+  #        run: cargo hack check --feature-powerset --all-targets
+  #
+  #      - name: Test
+  #        run: cargo test --release
+
+  #  test-msvr:
+  #    name: Test MSRV
+  #    runs-on: ubuntu-latest
+  #
+  #    strategy:
+  #      matrix:
+  #        rust:
+  #          - 1.60.0
+  #
+  #    steps:
+  #      - name: Checkout sources
+  #        uses: actions/checkout@v3
+  #
+  #      - name: Install toolchain
+  #        uses: dtolnay/rust-toolchain@master
+  #        with:
+  #          toolchain: ${{ matrix.rust }}
+  #
+  #      - name: Install dependencies
+  #        run: sudo apt-get install libssl-dev
+  #
+  #      - name: Check
+  #        run: cargo check
+
+  autobahn:
+    name: Autobahn tests
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin server --release
+          toolchain: ${{ matrix.rust }}
+
+      #      - name: Running Autobahn TestSuite for client
+      #        run: ./scripts/autobahn-client.sh
+
+      - name: Running Autobahn TestSuite for server
+        run: ./scripts/autobahn-server.sh
