@@ -71,6 +71,8 @@ pub fn validate_results(mut dir: PathBuf) -> Result<()> {
                 }
 
                 bail!("Autobahn test suite failure")
+            } else {
+                println!("All tests passed");
             }
         }
         _ => bail!("Invalid results structure"),
