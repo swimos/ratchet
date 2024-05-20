@@ -13,10 +13,10 @@ async fn kill_container() {
         .args(["kill", "fuzzingserver"])
         .stdin(Stdio::null())
         .spawn()
-        .expect("Failed to kill any lingering container")
+        .expect("Failed to spawn command to kill any lingering test container")
         .wait()
         .await
-        .expect("Failed to kill any lingering container");
+        .expect("Failed to kill any lingering test container");
 }
 
 fn docker_command() -> Result<Command> {

@@ -158,7 +158,17 @@ impl FramedRead {
                 DecodeResult::Incomplete(count) => {
                     let len = read_buffer.len();
                     read_buffer.resize(len + count, 0u8);
-                    io.read_exact(&mut read_buffer[len..]).await?;
+
+                    let read = io.read(&mut read_buffer[len..]).await?;
+
+                    if read == 0 {
+                        return Err(Error::with_cause(
+                            ErrorKind::IO,
+                            std::io::Error::from(std::io::ErrorKind::UnexpectedEof),
+                        ));
+                    }
+
+                    read_buffer.truncate(len + read);
                 }
                 DecodeResult::Finished(header, payload) => {
                     return Ok((header, payload));
@@ -506,6 +516,11 @@ where
 
     pub fn is_server(&self) -> bool {
         self.flags.contains(CodecFlags::ROLE)
+    }
+
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        self.io.flush().await?;
+        Ok(())
     }
 
     pub async fn write<A, F>(

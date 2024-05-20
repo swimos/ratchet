@@ -301,6 +301,14 @@ where
             .await
     }
 
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+        }
+
+        self.framed.flush().await
+    }
+
     /// Close this WebSocket with the reason provided.
     ///
     /// If the WebSocket is already closed then `Ok(())` is returned.

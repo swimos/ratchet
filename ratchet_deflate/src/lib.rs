@@ -461,7 +461,8 @@ impl ExtensionDecoder for DeflateDecoder {
             decompress.reset(false);
         }
 
-        header.rsv1 = true;
+        *compressed = false;
+
         Ok(())
     }
 }

@@ -16,6 +16,7 @@ use bytes::BytesMut;
 use log::trace;
 use ratchet_rs::deflate::DeflateExtProvider;
 use ratchet_rs::{Error, Message, PayloadType, ProtocolRegistry, WebSocketConfig};
+use tokio::io::{BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
@@ -30,7 +31,7 @@ async fn main() {
 
 async fn run(stream: TcpStream) -> Result<(), Error> {
     let mut websocket = ratchet_rs::accept_with(
-        stream,
+        BufReader::new(BufWriter::new(stream)),
         WebSocketConfig::default(),
         DeflateExtProvider::default(),
         ProtocolRegistry::default(),
@@ -48,10 +49,12 @@ async fn run(stream: TcpStream) -> Result<(), Error> {
             Message::Text => {
                 let _s = String::from_utf8(buf.to_vec())?;
                 websocket.write(&mut buf, PayloadType::Text).await?;
+                websocket.flush().await?;
                 buf.clear();
             }
             Message::Binary => {
                 websocket.write(&mut buf, PayloadType::Binary).await?;
+                websocket.flush().await?;
                 buf.clear();
             }
             Message::Ping(_) | Message::Pong(_) => {}

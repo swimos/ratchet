@@ -16,17 +16,20 @@ use bytes::BytesMut;
 use ratchet_deflate::{Deflate, DeflateExtProvider};
 use ratchet_rs::UpgradedClient;
 use ratchet_rs::{Error, Message, PayloadType, ProtocolRegistry, WebSocketConfig};
+use tokio::io::{BufReader, BufWriter};
 use tokio::net::TcpStream;
 
 const AGENT: &str = "Ratchet";
 
-async fn subscribe(url: &str) -> Result<UpgradedClient<TcpStream, Deflate>, Error> {
+async fn subscribe(
+    url: &str,
+) -> Result<UpgradedClient<BufReader<BufWriter<TcpStream>>, Deflate>, Error> {
     let stream = TcpStream::connect("127.0.0.1:9001").await.unwrap();
     stream.set_nodelay(true).unwrap();
 
     ratchet_rs::subscribe_with(
         WebSocketConfig::default(),
-        stream,
+        BufReader::new(BufWriter::new(stream)),
         url,
         &DeflateExtProvider::default(),
         ProtocolRegistry::default(),
