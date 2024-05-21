@@ -37,13 +37,13 @@ fn docker_command() -> Result<Command> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let _server_process = tokio::spawn(async move {
-        cargo_command("autobahn-server")
+    let server_process = tokio::spawn(async move {
+        let _r = cargo_command("autobahn-server")
             .expect(PWD_ERR)
             .spawn()
             .expect("Failed to spawn autobahn server")
             .wait()
-            .await
+            .await;
     });
 
     await_server_start(9002).await?;
@@ -63,6 +63,8 @@ async fn main() -> Result<()> {
     results_dir.push("ratchet_rs/autobahn/server/results");
 
     validate_results(results_dir)?;
+
+    server_process.abort();
 
     Ok(())
 }
