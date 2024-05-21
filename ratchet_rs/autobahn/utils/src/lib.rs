@@ -36,7 +36,9 @@ pub fn validate_results(mut dir: PathBuf) -> Result<()> {
 
     match results {
         Value::Object(map) => {
-            let ratchet_results = map["Ratchet"]
+            let ratchet_results = map
+                .get("Ratchet")
+                .expect("Missing results key")
                 .as_object()
                 .expect("Invalid result structure");
 

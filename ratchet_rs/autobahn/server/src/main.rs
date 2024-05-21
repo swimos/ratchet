@@ -52,7 +52,11 @@ async fn main() -> Result<()> {
         child.kill().await.expect("Failed to kill process");
     });
 
-    await_server_start(9002).await?;
+    if let Err(e) = await_server_start(9002).await {
+        stop.notify_waiters();
+        server_process.await.expect("Cargo server process failed");
+        return Err(e);
+    }
 
     let result = docker_command()?
         .spawn()

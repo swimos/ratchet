@@ -65,7 +65,10 @@ async fn main() -> Result<()> {
             .await
     });
 
-    await_server_start(9001).await?;
+    if let Err(e) = await_server_start(9001).await {
+        kill_container().await;
+        return Err(e);
+    }
 
     cargo_command("autobahn-client")?
         .spawn()

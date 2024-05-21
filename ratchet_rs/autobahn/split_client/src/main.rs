@@ -32,7 +32,7 @@ fn docker_command() -> Result<Command> {
         .arg(volume_arg)
         .args([
             "-p",
-            "9001:9001",
+            "9003:9003",
             "--init",
             "--platform",
             "linux/amd64",
@@ -65,7 +65,10 @@ async fn main() -> Result<()> {
             .await
     });
 
-    await_server_start(9001).await?;
+    if let Err(e) = await_server_start(9003).await {
+        kill_container().await;
+        return Err(e);
+    }
 
     cargo_command("autobahn-split-client")?
         .spawn()
