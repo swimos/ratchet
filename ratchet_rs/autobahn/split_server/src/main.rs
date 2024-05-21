@@ -14,7 +14,7 @@ fn docker_command() -> Result<Command> {
 
     // mount /pwd/autobahn/server to /autobahn in the volume
     let mut volume_arg = pwd.clone();
-    volume_arg.push("autobahn/server:/autobahn");
+    volume_arg.push("autobahn/split_server:/autobahn");
 
     let mut cmd = Command::new("docker");
     cmd.args(["run", "--rm", "-v"])
@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     let server_stop = stop.clone();
 
     let server_process = tokio::spawn(async move {
-        let mut child = cargo_command("autobahn-server")
+        let mut child = cargo_command("autobahn-split-server")
             .expect(PWD_ERR)
             .spawn()
             .expect("Failed to spawn autobahn server");
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
     }
 
     let mut results_dir = current_dir().context(PWD_ERR)?;
-    results_dir.push("ratchet_rs/autobahn/server/results");
+    results_dir.push("ratchet_rs/autobahn/split_server/results");
 
     validate_results(results_dir)?;
 

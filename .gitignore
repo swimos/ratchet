@@ -6,8 +6,7 @@
 
 ratchet_rs/autobahn/client/results
 ratchet_rs/autobahn/server/results
+ratchet_rs/autobahn/split_client/results
+ratchet_rs/autobahn/split_server/results
 
 **/.DS_Store
-
-autobahn/client
-autobahn/server

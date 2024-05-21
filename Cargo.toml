@@ -7,6 +7,8 @@ members = [
     "ratchet_rs",
     "ratchet_rs/autobahn/client",
     "ratchet_rs/autobahn/server",
+    "ratchet_rs/autobahn/split_client",
+    "ratchet_rs/autobahn/split_server",
     "ratchet_rs/autobahn/utils",
 ]
 

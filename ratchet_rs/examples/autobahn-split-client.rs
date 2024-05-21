@@ -38,7 +38,7 @@ async fn subscribe(
 }
 
 async fn get_case_count() -> Result<u32, Error> {
-    let mut websocket = subscribe("ws://localhost:9001/getCaseCount")
+    let mut websocket = subscribe("ws://localhost:9004/getCaseCount")
         .await
         .unwrap()
         .websocket;
@@ -64,27 +64,29 @@ async fn update_reports() -> Result<(), Error> {
 }
 
 async fn run_test(case: u32) -> Result<(), Error> {
-    let mut websocket = subscribe(&format!(
-        "ws://localhost:9001/runCase?case={}&agent={}",
+    let (mut tx, mut rx) = subscribe(&format!(
+        "ws://localhost:9004/runCase?case={}&agent={}",
         case, AGENT
     ))
     .await
     .unwrap()
-    .websocket;
+    .websocket
+    .split()
+    .unwrap();
 
     let mut buf = BytesMut::new();
 
     loop {
-        match websocket.read(&mut buf).await? {
+        match rx.read(&mut buf).await? {
             Message::Text => {
                 let _s = String::from_utf8(buf.to_vec())?;
-                websocket.write(&mut buf, PayloadType::Text).await?;
-                websocket.flush().await?;
+                tx.write(&mut buf, PayloadType::Text).await?;
+                tx.flush().await?;
                 buf.clear();
             }
             Message::Binary => {
-                websocket.write(&mut buf, PayloadType::Binary).await?;
-                websocket.flush().await?;
+                tx.write(&mut buf, PayloadType::Binary).await?;
+                tx.flush().await?;
                 buf.clear();
             }
             Message::Ping(_) | Message::Pong(_) => {}

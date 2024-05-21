@@ -20,16 +20,9 @@ pub fn cargo_command(example: &str) -> Result<Command> {
     pwd.push("ratchet_rs");
 
     let mut cmd = Command::new("cargo");
-    cmd.args([
-        "run",
-        "--release",
-        "--example",
-        example,
-        "--features",
-        "deflate",
-    ])
-    .current_dir(pwd)
-    .env("RUST_BACKTRACE", "FULL");
+    cmd.args(["run", "--release", "--example", example, "--all-features"])
+        .current_dir(pwd)
+        .env("RUST_BACKTRACE", "FULL");
 
     Ok(cmd)
 }

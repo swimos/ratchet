@@ -32,8 +32,8 @@ use crate::framed::{
 use crate::protocol::{CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode};
 use crate::ws::{extension_encode, CloseState, CONTROL_MAX_SIZE};
 use crate::{
-    framed, CloseCause, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
-    WebSocketStream,
+    framed, CloseCause, CloseCode, Error, ErrorKind, Message, PayloadType, ProtocolError, Role,
+    WebSocket, WebSocketStream,
 };
 
 mod bilock;
@@ -116,6 +116,11 @@ impl<S> WriteHalf<S>
 where
     S: WebSocketStream,
 {
+    async fn flush(&mut self) -> Result<(), Error> {
+        self.split_writer.flush().await?;
+        Ok(())
+    }
+
     async fn write<A, E>(
         &mut self,
         buf_ref: A,
@@ -323,6 +328,15 @@ where
             .await
     }
 
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+        }
+
+        let writer = &mut *self.split_writer.lock().await;
+        writer.flush().await
+    }
+
     /// Sends a new WebSocket message of `message_type` and with a payload of `buf_ref` and chunked
     /// by `fragment_size`. If the length of the buffer is less than the chunk size then only a
     /// single message is sent.
@@ -391,6 +405,15 @@ where
     /// Returns the role of this Receiver.
     pub fn role(&self) -> Role {
         self.role
+    }
+
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+        }
+
+        let FramedIo { split_writer, .. } = &mut self.framed;
+        split_writer.lock().await.flush().await
     }
 
     /// Attempt to read some data from the WebSocket. Returning either the type of the message
@@ -546,9 +569,13 @@ where
 
     match close_state.load(Ordering::SeqCst) {
         STATE_OPEN => {
-            let mut code = match &reason {
-                Some(reason) => u16::from(reason.code).to_be_bytes(),
-                None => [0; 2],
+            let mut code = match (&reason, &ret) {
+                (Some(reason), None) => u16::from(reason.code).to_be_bytes(),
+                (None, Some(error)) if error.is_protocol() | error.is_encoding() => {
+                    u16::from(CloseCode::Protocol).to_be_bytes()
+                }
+                (Some(reason), Some(_)) => u16::from(reason.code).to_be_bytes(),
+                _ => u16::from(CloseCode::Normal).to_be_bytes(),
             };
 
             // we don't want to immediately await the echoed close frame as the peer may elect to
@@ -564,19 +591,22 @@ where
                     |_, _| Ok(()),
                 )
                 .await;
-            match write_result {
-                Ok(()) => close_state.store(STATE_CLOSING, Ordering::SeqCst),
-                Err(_) => {
-                    if is_server {
-                        // 7.1.1: the TCP stream should be closed first by the server
-                        //
-                        // We aren't interested in any IO errors produced here as the peer *may* have
-                        // already closed the TCP stream.
-                        framed.close().await;
-                    }
-                    close_state.store(STATE_CLOSED, Ordering::SeqCst);
-                }
+
+            trace!("Write result: {write_result:?}");
+
+            if is_server {
+                trace!("Closing IO");
+
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                framed.close().await;
+                trace!("IO closed");
             }
+
+            close_state.store(STATE_CLOSED, Ordering::SeqCst);
+
             match ret {
                 Some(err) => Err(err),
                 None => Ok(Message::Close(reason)),
