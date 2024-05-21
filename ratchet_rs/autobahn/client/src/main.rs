@@ -4,13 +4,14 @@ use std::process::Stdio;
 use anyhow::{Context, Result};
 use tokio::process::Command;
 
-use utils::{await_server_start, cargo_command, validate_results};
+use utils::{await_server_start, cargo_command, pipe_logs, validate_results};
 
 const PWD_ERR: &str = "Failed to get PWD";
+const CONTAINER_NAME: &str = "fuzzingserver";
 
 async fn kill_container() {
     Command::new("docker")
-        .args(["kill", "fuzzingserver"])
+        .args(["kill", CONTAINER_NAME])
         .stdin(Stdio::null())
         .spawn()
         .expect("Failed to spawn command to kill any lingering test container")
@@ -37,7 +38,7 @@ fn docker_command() -> Result<Command> {
             "--platform",
             "linux/amd64",
             "--name",
-            "fuzzingserver",
+            CONTAINER_NAME,
             "crossbario/autobahn-testsuite:0.8.2",
             "wstest",
             "-m",
@@ -70,6 +71,14 @@ async fn main() -> Result<()> {
         return Err(e);
     }
 
+    let mut logs_process = match pipe_logs(CONTAINER_NAME).await {
+        Ok(child) => child,
+        Err(e) => {
+            kill_container().await;
+            return Err(e);
+        }
+    };
+
     cargo_command("autobahn-client")?
         .spawn()
         .context("Failed to spawn docker container")?
@@ -81,6 +90,7 @@ async fn main() -> Result<()> {
     results_dir.push("ratchet_rs/autobahn/client/results");
 
     validate_results(results_dir)?;
+    logs_process.kill().await?;
     kill_container().await;
 
     Ok(())

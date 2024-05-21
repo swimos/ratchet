@@ -8,7 +8,7 @@ use anyhow::Result;
 use anyhow::{bail, Context};
 use serde_json::Value;
 use tokio::net::TcpStream;
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::time::Instant;
 
 use ratchet_rs::{subscribe, WebSocketConfig};
@@ -74,6 +74,13 @@ pub fn validate_results(mut dir: PathBuf) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub async fn pipe_logs(name: &str) -> Result<Child> {
+    Command::new("docker")
+        .args(["logs", name, "-f"])
+        .spawn()
+        .context("Failed to probe container for logs")
 }
 
 pub async fn await_server_start(port: u64) -> Result<()> {
