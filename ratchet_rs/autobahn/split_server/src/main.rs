@@ -47,12 +47,9 @@ async fn main() -> Result<()> {
             .expect(PWD_ERR)
             .spawn()
             .expect("Failed to spawn autobahn server");
-        println!("Child spawned");
-        server_stop.notified().await;
-        println!("Notified");
 
-        child.start_kill().expect("Failed to start kill process");
-        println!("Killed")
+        server_stop.notified().await;
+        child.kill().await.expect("Failed to start kill process");
     });
 
     if let Err(e) = await_server_start(9004).await {
@@ -79,8 +76,6 @@ async fn main() -> Result<()> {
 
     stop.notify_waiters();
     server_process.await.expect("Cargo server process failed");
-
-    println!("Done");
 
     Ok(())
 }
