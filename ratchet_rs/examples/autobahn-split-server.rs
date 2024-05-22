@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use bytes::BytesMut;
-use log::trace;
 use ratchet_rs::deflate::DeflateExtProvider;
 use ratchet_rs::{Error, Message, PayloadType, ProtocolRegistry, WebSocketConfig};
 use tokio::io::{BufReader, BufWriter};
@@ -21,7 +20,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
 async fn main() {
-    let addr = "127.0.0.1:9002";
+    let addr = "127.0.0.1:9004";
     let listener = TcpListener::bind(&addr).await.unwrap();
 
     while let Ok((stream, _)) = listener.accept().await {
@@ -30,7 +29,7 @@ async fn main() {
 }
 
 async fn run(stream: TcpStream) -> Result<(), Error> {
-    let mut websocket = ratchet_rs::accept_with(
+    let (mut tx, mut rx) = ratchet_rs::accept_with(
         BufReader::new(BufWriter::new(stream)),
         WebSocketConfig::default(),
         DeflateExtProvider::default(),
@@ -40,26 +39,27 @@ async fn run(stream: TcpStream) -> Result<(), Error> {
     .unwrap()
     .upgrade()
     .await?
-    .websocket;
+    .websocket
+    .split()
+    .unwrap();
 
     let mut buf = BytesMut::new();
 
     loop {
-        match websocket.read(&mut buf).await? {
+        match rx.read(&mut buf).await? {
             Message::Text => {
                 let _s = String::from_utf8(buf.to_vec())?;
-                websocket.write(&mut buf, PayloadType::Text).await?;
-                websocket.flush().await?;
+                tx.write(&mut buf, PayloadType::Text).await?;
+                tx.flush().await?;
                 buf.clear();
             }
             Message::Binary => {
-                websocket.write(&mut buf, PayloadType::Binary).await?;
-                websocket.flush().await?;
+                tx.write(&mut buf, PayloadType::Binary).await?;
+                tx.flush().await?;
                 buf.clear();
             }
             Message::Ping(_) | Message::Pong(_) => {}
             Message::Close(_) => {
-                trace!("Test received close frame: {}", websocket.is_closed());
                 return Ok(());
             }
         }

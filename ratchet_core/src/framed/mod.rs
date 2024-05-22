@@ -497,6 +497,11 @@ where
         self.flags.contains(CodecFlags::ROLE)
     }
 
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        self.io.flush().await?;
+        Ok(())
+    }
+
     pub async fn write<A, F>(
         &mut self,
         opcode: OpCode,

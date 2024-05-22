@@ -116,6 +116,11 @@ impl<S> WriteHalf<S>
 where
     S: WebSocketStream,
 {
+    async fn flush(&mut self) -> Result<(), Error> {
+        self.split_writer.flush().await?;
+        Ok(())
+    }
+
     async fn write<A, E>(
         &mut self,
         buf_ref: A,
@@ -372,6 +377,22 @@ where
             ..
         } = &mut *self.split_writer.lock().await;
         write_close(split_writer, writer, reason, self.role.is_server()).await
+    }
+
+    /// Flushes the WebSocket's output stream, ensuring that all intermediately buffered contents
+    /// reach their destination.
+    ///
+    /// # Errors
+    ///
+    /// It is considered an error if not all bytes could be written due to I/O errors or EOF being
+    /// reached.
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+        }
+
+        let writer = &mut *self.split_writer.lock().await;
+        writer.flush().await
     }
 }
 
