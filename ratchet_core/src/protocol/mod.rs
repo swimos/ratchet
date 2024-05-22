@@ -61,7 +61,7 @@ impl HeaderFlags {
 }
 
 /// A received WebSocket frame.
-#[derive(Clone, Debug, PartialEq,Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Message {
     /// A text message.
     ///
@@ -165,7 +165,7 @@ impl Role {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq,Eq )]
+#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
 pub enum OpCode {
     #[display(fmt = "{}", _0)]
     DataCode(DataCode),
