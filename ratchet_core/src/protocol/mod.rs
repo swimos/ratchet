@@ -61,7 +61,7 @@ impl HeaderFlags {
 }
 
 /// A received WebSocket frame.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Message {
     /// A text message.
     ///
@@ -130,7 +130,7 @@ pub enum MessageType {
 }
 
 /// A configuration for building a WebSocket.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub struct WebSocketConfig {
     /// The maximum payload size that is permitted to be received.
     pub max_message_size: usize,
@@ -145,7 +145,7 @@ impl Default for WebSocketConfig {
 }
 
 /// The role of a WebSocket.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Role {
     /// The WebSocket is a client.
     Client,
@@ -165,7 +165,7 @@ impl Role {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq)]
+#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
 pub enum OpCode {
     #[display(fmt = "{}", _0)]
     DataCode(DataCode),
@@ -192,7 +192,7 @@ impl From<OpCode> for u8 {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq)]
+#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
 pub enum DataCode {
     Continuation = 0,
     Text = 1,
@@ -209,14 +209,14 @@ impl From<DataCode> for ratchet_ext::OpCode {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq)]
+#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
 pub enum ControlCode {
     Close = 8,
     Ping = 9,
     Pong = 10,
 }
 
-#[derive(Copy, Clone, Debug, Error, PartialEq)]
+#[derive(Copy, Clone, Debug, Error, PartialEq, Eq)]
 pub enum OpCodeParseErr {
     #[error("Reserved OpCode: `{0}`")]
     Reserved(u8),
@@ -243,7 +243,7 @@ impl TryFrom<u8> for OpCode {
 }
 
 /// A reason for closing the WebSocket connection.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CloseReason {
     /// The code to close the connection with.
     pub code: CloseCode,
@@ -263,7 +263,7 @@ impl CloseReason {
 /// <https://mailarchive.ietf.org/arch/msg/hybi/P_1vbD9uyHl63nbIIbFxKMfSwcM/>
 /// <https://tools.ietf.org/id/draft-ietf-hybi-thewebsocketprotocol-09.html>
 #[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CloseCode {
     Normal,
     GoingAway,

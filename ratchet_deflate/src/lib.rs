@@ -94,7 +94,7 @@ impl ExtensionProvider for DeflateExtProvider {
 }
 
 /// Client or server maximum window bits. Wrapping a `u8` with a value in the range of 8..=15.
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub struct WindowBits(u8);
 
 #[allow(missing_docs)]
@@ -150,7 +150,7 @@ impl WindowBits {
 }
 
 /// An error produced by `TryFrom<u8>` on `WindowBits` when the value is not in the range of 8..=15.
-#[derive(Error, Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Error, Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 #[error("Invalid window bits: `{0}`")]
 pub struct WindowBitsParseErr(u8);
 
@@ -184,7 +184,7 @@ impl From<WindowBits> for u8 {
 }
 
 /// A permessage-deflate configuration.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeflateConfig {
     /// The client's LZ77 sliding window size. Negotiated during the HTTP upgrade. In client mode,
     /// this conforms to RFC 7692 7.1.2.1. In server mode, this conforms to RFC 7692 7.1.2.2. Must

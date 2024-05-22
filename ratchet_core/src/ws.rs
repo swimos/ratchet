@@ -82,7 +82,7 @@ pub struct WebSocket<S, E> {
 }
 
 /// Denotes the current state of a WebSocket session.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CloseState {
     /// The session is active.
     NotClosed,
