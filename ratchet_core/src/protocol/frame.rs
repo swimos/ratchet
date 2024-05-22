@@ -75,7 +75,7 @@ pub struct BorrowedFrameHeader<'l> {
     pub mask: &'l Option<u32>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq,Eq)]
 pub struct FrameHeader {
     pub opcode: OpCode,
     pub flags: HeaderFlags,
