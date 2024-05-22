@@ -25,7 +25,7 @@ use std::iter::FromIterator;
 
 #[tokio::test]
 async fn frame_text() {
-    let bytes = BytesMut::from_iter(&[
+    let bytes = BytesMut::from_iter([
         129, 143, 0, 0, 0, 0, 66, 111, 110, 115, 111, 105, 114, 44, 32, 69, 108, 108, 105, 111, 116,
     ]);
 
@@ -249,10 +249,7 @@ async fn close() {
     )
     .await;
 
-    let mut frame = vec![136, 126, 1, 0];
-    frame.extend_from_slice(&[0; 256]);
-
-    let buffer = BytesMut::from_iter(frame);
+    let buffer = BytesMut::from_iter(vec![136, 2, 0, 0]);
     let mut framed = FramedIo::new(EmptyIo, buffer, Role::Client, usize::MAX, 0);
 
     let decode_result = framed.read_next(&mut BytesMut::default(), &mut NoExt).await;

@@ -19,7 +19,7 @@ use crate::protocol::{
     CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
     Role,
 };
-use crate::{WebSocketConfig, WebSocketStream};
+use crate::{CloseCode, WebSocketConfig, WebSocketStream};
 use bytes::BytesMut;
 use log::{error, trace};
 use ratchet_ext::{Extension, ExtensionEncoder, FrameHeader as ExtFrameHeader};
@@ -384,18 +384,26 @@ async fn close<S>(
 where
     S: WebSocketStream,
 {
+    trace!("Start close fn. Reason {reason:?}, return with {ret:?}");
+
     let server = framed.is_server();
     match *close_state {
         CloseState::NotClosed => {
-            let mut code = match &reason {
-                Some(reason) => u16::from(reason.code).to_be_bytes(),
-                None => [0; 2],
+            let mut code = match (&reason, &ret) {
+                (Some(reason), None) => u16::from(reason.code).to_be_bytes(),
+                (None, Some(error)) if error.is_protocol() | error.is_encoding() => {
+                    u16::from(CloseCode::Protocol).to_be_bytes()
+                }
+                (Some(reason), Some(_)) => u16::from(reason.code).to_be_bytes(),
+                _ => u16::from(CloseCode::Normal).to_be_bytes(),
             };
 
             // we don't want to immediately await the echoed close frame as the peer may elect to
             // drain any pending messages **before** echoing the close frame
 
-            let write_result = framed
+            trace!("Close send frame");
+
+            let _write_result = framed
                 .write(
                     OpCode::ControlCode(ControlCode::Close),
                     HeaderFlags::FIN,
@@ -403,19 +411,17 @@ where
                     |_, _| Ok(()),
                 )
                 .await;
-            match write_result {
-                Ok(()) => *close_state = CloseState::Closing,
-                Err(_) => {
-                    if server {
-                        // 7.1.1: the TCP stream should be closed first by the server
-                        //
-                        // We aren't interested in any IO errors produced here as the peer *may* have
-                        // already closed the TCP stream.
-                        framed.close().await;
-                    }
-                    *close_state = CloseState::Closed;
-                }
+
+            if server {
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                framed.close().await;
             }
+
+            *close_state = CloseState::Closed;
+
             match ret {
                 Some(err) => Err(err),
                 None => Ok(Message::Close(reason)),

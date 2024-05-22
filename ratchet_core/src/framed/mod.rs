@@ -21,6 +21,7 @@ use crate::protocol::{
     MessageType, OpCode, Role,
 };
 use crate::protocol::{BorrowedFramePrinter, FramePrinter};
+use crate::ws::CONTROL_MAX_SIZE;
 use crate::WebSocketStream;
 use bytes::Buf;
 use bytes::{BufMut, BytesMut};
@@ -279,28 +280,33 @@ impl FramedRead {
                 OpCode::ControlCode(c) => {
                     return match c {
                         ControlCode::Close => {
-                            let reason = if payload.len() < 2 {
-                                None
-                            } else {
-                                match CloseCode::try_from([payload[0], payload[1]])? {
-                                    close_code if close_code.is_illegal() => {
-                                        return Err(
-                                            ProtocolError::CloseCode(u16::from(close_code)).into()
-                                        )
+                            let reason = match payload.len() {
+                                0 => None,
+                                1 => {
+                                    return Err(ProtocolError::InvalidControlFrame.into());
+                                }
+                                2..=CONTROL_MAX_SIZE => {
+                                    let close_reason =
+                                        std::str::from_utf8(&payload[2..])?.to_string();
+                                    match CloseCode::try_from([payload[0], payload[1]])? {
+                                        close_code if close_code.is_illegal() => {
+                                            return Err(ProtocolError::CloseCode(u16::from(
+                                                close_code,
+                                            ))
+                                            .into())
+                                        }
+                                        close_code => {
+                                            let description = if close_reason.is_empty() {
+                                                None
+                                            } else {
+                                                Some(close_reason)
+                                            };
+                                            Some(CloseReason::new(close_code, description))
+                                        }
                                     }
-                                    close_code => {
-                                        let close_reason =
-                                            std::str::from_utf8(&payload[2..])?.to_string();
-                                        let description = if close_reason.is_empty() {
-                                            None
-                                        } else {
-                                            Some(close_reason)
-                                        };
-
-                                        let reason = CloseReason::new(close_code, description);
-
-                                        Some(reason)
-                                    }
+                                }
+                                _ => {
+                                    return Err(ProtocolError::FrameOverflow.into());
                                 }
                             };
 

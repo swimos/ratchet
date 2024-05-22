@@ -307,6 +307,9 @@ pub enum ProtocolError {
     /// Received unexpected control frame data
     #[error("Received unexpected control frame data")]
     ControlDataMismatch,
+    /// An invalid control frame was received.
+    #[error("Received an invalid control frame")]
+    InvalidControlFrame,
 }
 
 impl From<FromUtf8Error> for Error {
