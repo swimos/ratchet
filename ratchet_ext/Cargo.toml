@@ -11,6 +11,6 @@ readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
-http = "1.1.0"
-httparse = "1.4.1"
-bytes = "1.0"
+http = { workspace = true }
+httparse = { workspace = true }
+bytes = { workspace = true }
