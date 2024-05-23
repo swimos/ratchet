@@ -27,7 +27,7 @@ use std::convert::TryFrom;
 use thiserror::Error;
 
 bitflags::bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub struct HeaderFlags: u8 {
         const FIN       = 0b1000_0000;
 
