@@ -34,7 +34,7 @@ const UNKNOWN_PARAM: &str = "Unknown permessage-deflate parameter";
 const DUPLICATE_PARAM: &str = "Duplicate permessage-deflate parameter";
 const HEADER_ERR: &str = "Failed to produce header";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InitialisedDeflateConfig {
     pub server_max_window_bits: WindowBits,
     pub client_max_window_bits: WindowBits,

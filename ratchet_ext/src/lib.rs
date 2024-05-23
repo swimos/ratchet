@@ -131,7 +131,7 @@ where
 }
 
 /// A data code for a frame.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OpCode {
     /// The message is a continuation.
     Continuation,
@@ -163,7 +163,7 @@ impl OpCode {
 /// This is passed to both `ExtensionEncoder::encode` and `ExtensionDecoder::decode` when a frame
 /// has been received. Changes to the reserved bits on a decode call will be sent to the peer.
 /// Any other changes or changes made when decoding will have no effect.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FrameHeader {
     /// Whether this is the final frame.
     ///

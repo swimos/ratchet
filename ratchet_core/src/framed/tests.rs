@@ -25,7 +25,7 @@ use std::iter::FromIterator;
 
 #[tokio::test]
 async fn frame_text() {
-    let bytes = BytesMut::from_iter(&[
+    let bytes = BytesMut::from_iter([
         129, 143, 0, 0, 0, 0, 66, 111, 110, 115, 111, 105, 114, 44, 32, 69, 108, 108, 105, 111, 116,
     ]);
 
