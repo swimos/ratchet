@@ -20,11 +20,13 @@ fixture = ["ratchet_core/fixture"]
 ratchet_core = { version = "0.4.2", path = "../ratchet_core" }
 ratchet_ext = { version = "0.4.2", path = "../ratchet_ext" }
 ratchet_deflate = { version = "0.4.2", path = "../ratchet_deflate", optional = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+log = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1.1.1", features = ["rt-multi-thread", "macros", "test-util"] }
-tokio-stream = { version = "0.1.4", features = ["net"] }
-bytes = "1.0"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
+tokio-stream = { workspace = true, features = ["net"] }
+bytes = { workspace = true }
 
 [[example]]
 name = "autobahn-client"

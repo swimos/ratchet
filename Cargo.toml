@@ -6,3 +6,27 @@ members = [
     "ratchet_ext",
     "ratchet_fixture"
 ]
+
+[workspace.dependencies]
+url = "2.1.1"
+http = "1.1.0"
+tokio = "1.1.1"
+tokio-util = "0.7.11"
+tokio-stream = "0.1.4"
+futures = "0.3.4"
+futures-util = "0.3.4"
+derive_more = "0.99.14"
+thiserror = "1.0"
+bytes = "1.0"
+rand = "0.8"
+sha-1 = "0.10"
+base64 = "0.22"
+httparse = "1.4.1"
+fnv = "1.0.3"
+bitflags = "2.5"
+either = "1.5.3"
+log = "0.4.14"
+flate2 = "1.0"
+anyhow = "1.0"
+serde_json = "1.0"
+tracing-subscriber = "0.3.18"
