@@ -28,7 +28,7 @@ thiserror = "1.0"
 bytes = "1.0"
 rand = { version = "0.8", features = ["std", "small_rng", "getrandom"] }
 sha-1 = "0.10"
-base64 = "0.13"
+base64 = "0.22"
 httparse = "1.4.1"
 fnv = "1.0.3"
 bitflags = "1.2"
