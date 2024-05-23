@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use log::{error, trace};
-use tokio::io::AsyncWriteExt;
 
 use bilock::{bilock, BiLock};
 use ratchet_ext::{ExtensionDecoder, ExtensionEncoder, ReunitableExtension, SplittableExtension};
@@ -201,10 +200,6 @@ where
                 }
             }
         }
-    }
-
-    async fn close(&mut self) {
-        let _r = self.split_writer.shutdown().await;
     }
 }
 
@@ -474,26 +469,34 @@ where
                     Ok(Message::Pong(payload.freeze()))
                 }
                 Item::Close(reason) => {
+                    let code = reason
+                        .as_ref()
+                        .map(|reason| reason.code)
+                        .unwrap_or(CloseCode::Normal);
+
                     close(
+                        role.is_server(),
                         close_state,
                         &mut *split_writer.lock().await,
-                        role.is_server(),
-                        reason,
-                        None,
+                        code,
                     )
-                    .await
+                    .await?;
+                    Ok(Message::Close(reason))
                 }
             },
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
-                close(
+
+                // We want to close the connection but return the error produced during the session,
+                // not any during the close sequence.
+                let _r = close(
+                    role.is_server(),
                     close_state,
                     &mut *split_writer.lock().await,
-                    role.is_server(),
-                    None,
-                    Some(e),
+                    CloseCode::Protocol,
                 )
-                .await
+                .await;
+                Err(e)
             }
         }
     }
@@ -528,12 +531,11 @@ where
 }
 
 async fn close<S>(
-    close_state: &AtomicU8,
-    framed: &mut WriteHalf<S>,
     is_server: bool,
-    reason: Option<CloseReason>,
-    ret: Option<Error>,
-) -> Result<Message, Error>
+    state_ref: &AtomicU8,
+    framed: &mut WriteHalf<S>,
+    code: CloseCode,
+) -> Result<(), Error>
 where
     S: WebSocketStream,
 {
@@ -542,63 +544,29 @@ where
         writer,
         ..
     } = framed;
-
-    match close_state.load(Ordering::SeqCst) {
-        STATE_OPEN => {
-            let mut code = match (&reason, &ret) {
-                (Some(reason), None) => u16::from(reason.code).to_be_bytes(),
-                (None, Some(error)) if error.is_protocol() | error.is_encoding() => {
-                    u16::from(CloseCode::Protocol).to_be_bytes()
-                }
-                (Some(reason), Some(_)) => u16::from(reason.code).to_be_bytes(),
-                _ => u16::from(CloseCode::Normal).to_be_bytes(),
-            };
-
-            // we don't want to immediately await the echoed close frame as the peer may elect to
-            // drain any pending messages **before** echoing the close frame
-
-            let _write_result = writer
-                .write(
-                    split_writer,
-                    is_server,
-                    OpCode::ControlCode(ControlCode::Close),
-                    HeaderFlags::FIN,
-                    &mut code,
-                    |_, _| Ok(()),
-                )
-                .await;
-
-            if is_server {
-                // 7.1.1: the TCP stream should be closed first by the server
-                //
-                // We aren't interested in any IO errors produced here as the peer *may* have
-                // already closed the TCP stream.
-                framed.close().await;
-                trace!("IO closed");
-            }
-
-            close_state.store(STATE_CLOSED, Ordering::SeqCst);
-
-            match ret {
-                Some(err) => Err(err),
-                None => Ok(Message::Close(reason)),
-            }
-        }
-        STATE_CLOSING => {
-            close_state.store(STATE_CLOSED, Ordering::SeqCst);
-            if is_server {
-                // 7.1.1: the TCP stream should be closed first by the server
-                //
-                // We aren't interested in any IO errors produced here as the peer *may* have
-                // already closed the TCP stream.
-                framed.close().await;
-            }
-
-            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
-        }
-        STATE_CLOSED => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
+    let close_state = match state_ref.load(Ordering::SeqCst) {
+        STATE_OPEN => CloseState::NotClosed,
+        STATE_CLOSING => CloseState::Closing,
+        STATE_CLOSED => CloseState::Closing,
         s => panic!("Unexpected close state: {}", s),
-    }
+    };
+
+    crate::ws::close(
+        is_server,
+        close_state,
+        |state| {
+            let state_u8 = match state {
+                CloseState::NotClosed => STATE_OPEN,
+                CloseState::Closing => STATE_CLOSING,
+                CloseState::Closed => STATE_CLOSED,
+            };
+            state_ref.store(state_u8, Ordering::SeqCst)
+        },
+        split_writer,
+        writer,
+        code,
+    )
+    .await
 }
 
 /// An error produced by `reunite` if the halves do not match.

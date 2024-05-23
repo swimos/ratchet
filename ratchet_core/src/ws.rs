@@ -14,7 +14,7 @@
 
 use crate::errors::{CloseCause, Error, ErrorKind, ProtocolError};
 use crate::ext::NegotiatedExtension;
-use crate::framed::{FramedIo, Item};
+use crate::framed::{FramedIo, FramedWrite, Item};
 use crate::protocol::{
     CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
     Role,
@@ -23,6 +23,7 @@ use crate::{CloseCode, WebSocketConfig, WebSocketStream};
 use bytes::BytesMut;
 use log::{error, trace};
 use ratchet_ext::{Extension, ExtensionEncoder, FrameHeader as ExtFrameHeader};
+use tokio::io::AsyncWriteExt;
 
 #[cfg(feature = "split")]
 use crate::split::{split, Receiver, Sender};
@@ -210,11 +211,54 @@ where
                     }
                     Ok(Message::Pong(payload.freeze()))
                 }
-                Item::Close(reason) => close(close_state, framed, reason, None).await,
+                Item::Close(reason) => {
+                    let is_server = framed.is_server();
+                    let code = reason
+                        .as_ref()
+                        .map(|reason| reason.code)
+                        .unwrap_or(CloseCode::Normal);
+
+                    framed
+                        .with_writer(|io, writer| async {
+                            close(
+                                is_server,
+                                *close_state,
+                                |state| {
+                                    *close_state = state;
+                                },
+                                io,
+                                writer,
+                                code,
+                            )
+                            .await
+                        })
+                        .await?;
+                    Ok(Message::Close(reason))
+                }
             },
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
-                close(close_state, framed, None, Some(e)).await
+
+                let is_server = framed.is_server();
+
+                // We want to close the connection but return the error produced during the session,
+                // not any during the close sequence.
+                let _r = framed
+                    .with_writer(|io, writer| async {
+                        close(
+                            is_server,
+                            *close_state,
+                            |state| {
+                                *close_state = state;
+                            },
+                            io,
+                            writer,
+                            CloseCode::Protocol,
+                        )
+                        .await
+                    })
+                    .await;
+                Err(e)
             }
         }
     }
@@ -375,69 +419,58 @@ where
     }
 }
 
-async fn close<S>(
-    close_state: &mut CloseState,
-    framed: &mut FramedIo<S>,
-    reason: Option<CloseReason>,
-    ret: Option<Error>,
-) -> Result<Message, Error>
+pub async fn close<S, F>(
+    is_server: bool,
+    close_state: CloseState,
+    update_state: F,
+    io: &mut S,
+    framed: &mut FramedWrite,
+    code: CloseCode,
+) -> Result<(), Error>
 where
     S: WebSocketStream,
+    F: FnOnce(CloseState),
 {
-    trace!("Start close fn. Reason {reason:?}, return with {ret:?}");
-
-    let server = framed.is_server();
-    match *close_state {
+    match close_state {
         CloseState::NotClosed => {
-            let mut code = match (&reason, &ret) {
-                (Some(reason), None) => u16::from(reason.code).to_be_bytes(),
-                (None, Some(error)) if error.is_protocol() | error.is_encoding() => {
-                    u16::from(CloseCode::Protocol).to_be_bytes()
-                }
-                (Some(reason), Some(_)) => u16::from(reason.code).to_be_bytes(),
-                _ => u16::from(CloseCode::Normal).to_be_bytes(),
-            };
-
             // we don't want to immediately await the echoed close frame as the peer may elect to
             // drain any pending messages **before** echoing the close frame
 
-            trace!("Close send frame");
-
             let _write_result = framed
                 .write(
+                    io,
+                    is_server,
                     OpCode::ControlCode(ControlCode::Close),
                     HeaderFlags::FIN,
-                    &mut code,
+                    &mut u16::from(code).to_be_bytes(),
                     |_, _| Ok(()),
                 )
                 .await;
 
-            if server {
+            if is_server {
                 // 7.1.1: the TCP stream should be closed first by the server
                 //
                 // We aren't interested in any IO errors produced here as the peer *may* have
                 // already closed the TCP stream.
-                framed.close().await;
+                let _r = io.shutdown().await;
             }
 
-            *close_state = CloseState::Closed;
+            update_state(CloseState::Closed);
 
-            match ret {
-                Some(err) => Err(err),
-                None => Ok(Message::Close(reason)),
-            }
+            Ok(())
         }
         CloseState::Closing => {
-            *close_state = CloseState::Closed;
-            if server {
+            update_state(CloseState::Closed);
+
+            if is_server {
                 // 7.1.1: the TCP stream should be closed first by the server
                 //
                 // We aren't interested in any IO errors produced here as the peer *may* have
                 // already closed the TCP stream.
-                framed.close().await;
+                let _r = io.shutdown().await;
             }
 
-            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
+            Err(Error::with_cause(ErrorKind::Close, CloseCause::Stopped))
         }
         CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
     }
