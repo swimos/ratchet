@@ -17,6 +17,8 @@ mod tests;
 
 mod encoding;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use bytes::BytesMut;
 use http::{header, Request, StatusCode};
 use httparse::{Response, Status};
@@ -384,7 +386,7 @@ where
             digest.update(expected_nonce);
             digest.update(ACCEPT_KEY);
 
-            let expected = base64::encode(digest.finalize());
+            let expected = STANDARD.encode(digest.finalize());
             if expected.as_bytes() != actual {
                 Err(Error::with_cause(ErrorKind::Http, HttpError::KeyMismatch))
             } else {

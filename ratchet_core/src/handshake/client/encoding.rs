@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base64::encode_config_slice;
+use base64::Engine;
 use bytes::{BufMut, BytesMut};
 use http::header::{AsHeaderName, HeaderName, IntoHeaderName};
 use http::request::Parts;
@@ -26,6 +26,8 @@ use crate::handshake::{
     apply_to, ProtocolRegistry, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
 };
 
+use base64::engine::general_purpose::STANDARD;
+
 pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffer: &mut Nonce) {
     let ValidatedRequest {
         version,
@@ -35,7 +37,13 @@ pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffe
     } = request;
 
     let nonce = rand::random::<[u8; 16]>();
-    encode_config_slice(nonce, base64::STANDARD, nonce_buffer);
+
+    // This will only fail due to the buffer being too small but one with sufficient capacity has
+    // been allocated.
+    STANDARD
+        .encode_slice(nonce, nonce_buffer)
+        .expect("Encoding should has succeeded");
+
     let nonce_str = std::str::from_utf8(nonce_buffer).expect("Invalid UTF8");
 
     let request = format!(

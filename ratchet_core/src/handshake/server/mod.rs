@@ -26,6 +26,7 @@ use crate::{
     Error, HttpError, NoExtProvider, ProtocolRegistry, Request, WebSocket, WebSocketConfig,
     WebSocketStream,
 };
+use base64::engine::{general_purpose::STANDARD, Engine};
 use bytes::{Bytes, BytesMut};
 use http::status::InvalidStatusCode;
 use http::{HeaderMap, HeaderValue, StatusCode, Uri};
@@ -248,7 +249,7 @@ where
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(digest.finalize());
+        let sec_websocket_accept = STANDARD.encode(digest.finalize());
         headers.insert(
             http::header::SEC_WEBSOCKET_ACCEPT,
             HeaderValue::try_from(sec_websocket_accept)?,
