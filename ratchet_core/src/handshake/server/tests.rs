@@ -17,7 +17,6 @@ use crate::test_fixture::{mock, ReadError};
 use crate::{
     accept_with, Error, ErrorKind, HttpError, NoExtProvider, ProtocolRegistry, WebSocketConfig,
 };
-use bitflags::_core::convert::Infallible;
 use bytes::BytesMut;
 use http::header::HeaderName;
 use http::{HeaderMap, HeaderValue, Request, Response, Version};
@@ -26,6 +25,7 @@ use ratchet_ext::{
     Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader,
     ReunitableExtension, RsvBits, SplittableExtension,
 };
+use std::convert::Infallible;
 
 impl From<ReadError<httparse::Error>> for Error {
     fn from(e: ReadError<httparse::Error>) -> Self {

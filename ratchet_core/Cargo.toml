@@ -31,7 +31,7 @@ sha-1 = "0.10"
 base64 = "0.22"
 httparse = "1.4.1"
 fnv = "1.0.3"
-bitflags = "1.2"
+bitflags = "2.5"
 either = "1.5.3"
 log = "0.4.14"
 
