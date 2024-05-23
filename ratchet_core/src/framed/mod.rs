@@ -35,7 +35,7 @@ use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Item {
     Binary,
     Text,

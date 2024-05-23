@@ -147,7 +147,7 @@ impl From<InvalidStatusCode> for Error {
 }
 
 /// HTTP errors.
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum HttpError {
     /// An invalid HTTP method was received.
     #[error("Invalid HTTP method: `{0:?}`")]
@@ -254,7 +254,7 @@ impl From<InvalidHeaderValue> for Error {
     }
 }
 
-#[derive(Clone, Copy, Error, Debug, PartialEq)]
+#[derive(Clone, Copy, Error, Debug, PartialEq, Eq)]
 /// The channel is closed
 #[error("The channel is already closed")]
 pub enum CloseCause {
@@ -269,7 +269,7 @@ pub enum CloseCause {
 }
 
 /// WebSocket protocol errors.
-#[derive(Copy, Clone, Debug, PartialEq, Error)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Error)]
 pub enum ProtocolError {
     /// Invalid encoding was received.
     #[error("Not valid UTF-8 encoding")]
