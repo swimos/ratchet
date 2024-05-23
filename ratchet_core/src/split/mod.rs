@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
-use bitflags::_core::sync::atomic::Ordering;
 use bytes::BytesMut;
 use log::{error, trace};
 use tokio::io::AsyncWriteExt;
