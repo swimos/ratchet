@@ -32,7 +32,6 @@ use rand::{Rng, SeedableRng};
 use ratchet_ext::{ExtensionDecoder, FrameHeader as ExtFrameHeader, OpCode as ExtOpCode};
 use std::convert::TryFrom;
 use std::fmt::{Debug, Formatter};
-use std::future::Future;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug, Eq, PartialEq)]
@@ -495,15 +494,6 @@ where
         }
     }
 
-    pub async fn with_writer<'s, F, A>(&'s mut self, f: F) -> A::Output
-    where
-        F: FnOnce(&'s mut I, &'s mut FramedWrite) -> A,
-        A: Future + 's,
-    {
-        let FramedIo { io, writer, .. } = self;
-        f(io, writer).await
-    }
-
     pub fn is_server(&self) -> bool {
         self.flags.contains(CodecFlags::ROLE)
     }
@@ -583,6 +573,11 @@ where
             extension,
         )
         .await
+    }
+
+    pub async fn shutdown(&mut self) -> Result<(), Error> {
+        self.io.shutdown().await?;
+        Ok(())
     }
 }
 

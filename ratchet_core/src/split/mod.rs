@@ -17,7 +17,10 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use futures_util::future::BoxFuture;
+use futures_util::{FutureExt, TryFutureExt};
 use log::{error, trace};
+use tokio::io::AsyncWriteExt;
 
 use bilock::{bilock, BiLock};
 use ratchet_ext::{ExtensionDecoder, ExtensionEncoder, ReunitableExtension, SplittableExtension};
@@ -28,7 +31,7 @@ use crate::framed::{
     Item,
 };
 use crate::protocol::{CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode};
-use crate::ws::{extension_encode, CloseState, CONTROL_MAX_SIZE};
+use crate::ws::{extension_encode, CloseState, WebSocketClose, CONTROL_MAX_SIZE};
 use crate::{
     framed, CloseCause, CloseCode, Error, ErrorKind, Message, PayloadType, ProtocolError, Role,
     WebSocket, WebSocketStream,
@@ -78,6 +81,7 @@ where
         control_buffer,
         split_writer: write_half,
         writer,
+        is_server: flags.contains(CodecFlags::ROLE),
     });
 
     let (ext_encoder, ext_decoder) = extension.split();
@@ -130,6 +134,7 @@ where
             split_writer,
             writer,
             control_buffer,
+            ..
         } = self;
         let buf = buf_ref.as_ref();
 
@@ -208,6 +213,7 @@ struct WriteHalf<S> {
     split_writer: BiLock<S>,
     writer: FramedWrite,
     control_buffer: BytesMut,
+    is_server: bool,
 }
 
 #[derive(Debug)]
@@ -489,7 +495,7 @@ where
 
                 // We want to close the connection but return the error produced during the session,
                 // not any during the close sequence.
-                let _r = close(
+                let _ = close(
                     role.is_server(),
                     close_state,
                     &mut *split_writer.lock().await,
@@ -530,6 +536,37 @@ where
     }
 }
 
+impl<S> WebSocketClose for WriteHalf<S>
+where
+    S: WebSocketStream,
+{
+    fn write(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
+        let WriteHalf {
+            split_writer,
+            writer,
+            is_server,
+            ..
+        } = self;
+
+        Box::pin(async move {
+            writer
+                .write(
+                    split_writer,
+                    *is_server,
+                    OpCode::ControlCode(ControlCode::Close),
+                    HeaderFlags::FIN,
+                    &mut u16::from(code).to_be_bytes(),
+                    |_, _| Ok(()),
+                )
+                .await
+        })
+    }
+
+    fn shutdown(&mut self) -> BoxFuture<Result<(), Error>> {
+        self.split_writer.shutdown().map_err(Into::into).boxed()
+    }
+}
+
 async fn close<S>(
     is_server: bool,
     state_ref: &AtomicU8,
@@ -539,34 +576,16 @@ async fn close<S>(
 where
     S: WebSocketStream,
 {
-    let WriteHalf {
-        split_writer,
-        writer,
-        ..
-    } = framed;
     let close_state = match state_ref.load(Ordering::SeqCst) {
         STATE_OPEN => CloseState::NotClosed,
         STATE_CLOSING => CloseState::Closing,
         STATE_CLOSED => CloseState::Closing,
         s => panic!("Unexpected close state: {}", s),
     };
+    let close_result = crate::ws::close(framed, is_server, close_state, code).await;
 
-    crate::ws::close(
-        is_server,
-        close_state,
-        |state| {
-            let state_u8 = match state {
-                CloseState::NotClosed => STATE_OPEN,
-                CloseState::Closing => STATE_CLOSING,
-                CloseState::Closed => STATE_CLOSED,
-            };
-            state_ref.store(state_u8, Ordering::SeqCst)
-        },
-        split_writer,
-        writer,
-        code,
-    )
-    .await
+    state_ref.store(STATE_CLOSED, Ordering::SeqCst);
+    close_result
 }
 
 /// An error produced by `reunite` if the halves do not match.
