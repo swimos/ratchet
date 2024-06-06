@@ -540,7 +540,7 @@ impl<S> WebSocketClose for WriteHalf<S>
 where
     S: WebSocketStream,
 {
-    fn write(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
+    fn write_close_frame(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
         let WriteHalf {
             split_writer,
             writer,

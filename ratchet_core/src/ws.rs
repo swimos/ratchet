@@ -401,7 +401,7 @@ where
 pub trait WebSocketClose {
     /// Write a WebSocket close frame. The frame *must* have the FIN flag set high and be
     /// uncompressed.
-    fn write(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>>;
+    fn write_close_frame(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>>;
 
     /// Shutdown the connection's underlying IO.
     fn shutdown(&mut self) -> BoxFuture<Result<(), Error>>;
@@ -411,7 +411,7 @@ impl<S> WebSocketClose for FramedIo<S>
 where
     S: WebSocketStream,
 {
-    fn write(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
+    fn write_close_frame(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
         Box::pin(async move {
             self.write(
                 OpCode::ControlCode(ControlCode::Close),
@@ -439,7 +439,7 @@ pub async fn close(
             // we don't want to immediately await the echoed close frame as the peer may elect to
             // drain any pending messages **before** echoing the close frame
 
-            let _ = closer.write(code).await;
+            let _ = closer.write_close_frame(code).await;
 
             if is_server {
                 // 7.1.1: the TCP stream should be closed first by the server
