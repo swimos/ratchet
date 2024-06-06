@@ -17,6 +17,8 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use futures_util::future::BoxFuture;
+use futures_util::{FutureExt, TryFutureExt};
 use log::{error, trace};
 use tokio::io::AsyncWriteExt;
 
@@ -29,10 +31,10 @@ use crate::framed::{
     Item,
 };
 use crate::protocol::{CloseReason, ControlCode, DataCode, HeaderFlags, MessageType, OpCode};
-use crate::ws::{extension_encode, CloseState, CONTROL_MAX_SIZE};
+use crate::ws::{extension_encode, CloseState, WebSocketClose, CONTROL_MAX_SIZE};
 use crate::{
-    framed, CloseCause, Error, ErrorKind, Message, PayloadType, ProtocolError, Role, WebSocket,
-    WebSocketStream,
+    framed, CloseCause, CloseCode, Error, ErrorKind, Message, PayloadType, ProtocolError, Role,
+    WebSocket, WebSocketStream,
 };
 
 mod bilock;
@@ -79,6 +81,7 @@ where
         control_buffer,
         split_writer: write_half,
         writer,
+        is_server: flags.contains(CodecFlags::ROLE),
     });
 
     let (ext_encoder, ext_decoder) = extension.split();
@@ -131,6 +134,7 @@ where
             split_writer,
             writer,
             control_buffer,
+            ..
         } = self;
         let buf = buf_ref.as_ref();
 
@@ -202,10 +206,6 @@ where
             }
         }
     }
-
-    async fn close(&mut self) {
-        let _r = self.split_writer.shutdown().await;
-    }
 }
 
 #[derive(Debug)]
@@ -213,6 +213,7 @@ struct WriteHalf<S> {
     split_writer: BiLock<S>,
     writer: FramedWrite,
     control_buffer: BytesMut,
+    is_server: bool,
 }
 
 #[derive(Debug)]
@@ -474,26 +475,34 @@ where
                     Ok(Message::Pong(payload.freeze()))
                 }
                 Item::Close(reason) => {
+                    let code = reason
+                        .as_ref()
+                        .map(|reason| reason.code)
+                        .unwrap_or(CloseCode::Normal);
+
                     close(
+                        role.is_server(),
                         close_state,
                         &mut *split_writer.lock().await,
-                        role.is_server(),
-                        reason,
-                        None,
+                        code,
                     )
-                    .await
+                    .await?;
+                    Ok(Message::Close(reason))
                 }
             },
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
-                close(
+
+                // We want to close the connection but return the error produced during the session,
+                // not any during the close sequence.
+                let _ = close(
+                    role.is_server(),
                     close_state,
                     &mut *split_writer.lock().await,
-                    role.is_server(),
-                    None,
-                    Some(e),
+                    CloseCode::Protocol,
                 )
-                .await
+                .await;
+                Err(e)
             }
         }
     }
@@ -527,75 +536,56 @@ where
     }
 }
 
-async fn close<S>(
-    close_state: &AtomicU8,
-    framed: &mut WriteHalf<S>,
-    is_server: bool,
-    reason: Option<CloseReason>,
-    ret: Option<Error>,
-) -> Result<Message, Error>
+impl<S> WebSocketClose for WriteHalf<S>
 where
     S: WebSocketStream,
 {
-    let WriteHalf {
-        split_writer,
-        writer,
-        ..
-    } = framed;
+    fn write_close_frame(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
+        let WriteHalf {
+            split_writer,
+            writer,
+            is_server,
+            ..
+        } = self;
 
-    match close_state.load(Ordering::SeqCst) {
-        STATE_OPEN => {
-            let mut code = match &reason {
-                Some(reason) => u16::from(reason.code).to_be_bytes(),
-                None => [0; 2],
-            };
-
-            // we don't want to immediately await the echoed close frame as the peer may elect to
-            // drain any pending messages **before** echoing the close frame
-
-            let write_result = writer
+        Box::pin(async move {
+            writer
                 .write(
                     split_writer,
-                    is_server,
+                    *is_server,
                     OpCode::ControlCode(ControlCode::Close),
                     HeaderFlags::FIN,
-                    &mut code,
+                    &mut u16::from(code).to_be_bytes(),
                     |_, _| Ok(()),
                 )
-                .await;
-            match write_result {
-                Ok(()) => close_state.store(STATE_CLOSING, Ordering::SeqCst),
-                Err(_) => {
-                    if is_server {
-                        // 7.1.1: the TCP stream should be closed first by the server
-                        //
-                        // We aren't interested in any IO errors produced here as the peer *may* have
-                        // already closed the TCP stream.
-                        framed.close().await;
-                    }
-                    close_state.store(STATE_CLOSED, Ordering::SeqCst);
-                }
-            }
-            match ret {
-                Some(err) => Err(err),
-                None => Ok(Message::Close(reason)),
-            }
-        }
-        STATE_CLOSING => {
-            close_state.store(STATE_CLOSED, Ordering::SeqCst);
-            if is_server {
-                // 7.1.1: the TCP stream should be closed first by the server
-                //
-                // We aren't interested in any IO errors produced here as the peer *may* have
-                // already closed the TCP stream.
-                framed.close().await;
-            }
-
-            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
-        }
-        STATE_CLOSED => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
-        s => panic!("Unexpected close state: {}", s),
+                .await
+        })
     }
+
+    fn shutdown(&mut self) -> BoxFuture<Result<(), Error>> {
+        self.split_writer.shutdown().map_err(Into::into).boxed()
+    }
+}
+
+async fn close<S>(
+    is_server: bool,
+    state_ref: &AtomicU8,
+    framed: &mut WriteHalf<S>,
+    code: CloseCode,
+) -> Result<(), Error>
+where
+    S: WebSocketStream,
+{
+    let close_state = match state_ref.load(Ordering::SeqCst) {
+        STATE_OPEN => CloseState::NotClosed,
+        STATE_CLOSING => CloseState::Closing,
+        STATE_CLOSED => CloseState::Closing,
+        s => panic!("Unexpected close state: {}", s),
+    };
+    let close_result = crate::ws::close(framed, is_server, close_state, code).await;
+
+    state_ref.store(STATE_CLOSED, Ordering::SeqCst);
+    close_result
 }
 
 /// An error produced by `reunite` if the halves do not match.
