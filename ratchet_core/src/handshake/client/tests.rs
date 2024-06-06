@@ -18,6 +18,7 @@ use crate::handshake::client::{ClientHandshake, HandshakeResult};
 use crate::handshake::{ProtocolRegistry, ACCEPT_KEY, UPGRADE_STR, WEBSOCKET_STR};
 use crate::test_fixture::mock;
 use crate::{ErrorKind, NoExtProvider, ProtocolError, TryIntoRequest};
+use base64::engine::{general_purpose::STANDARD, Engine};
 use bytes::BytesMut;
 use futures::future::join;
 use futures::FutureExt;
@@ -287,7 +288,7 @@ async fn ok_nonce() {
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(digest.finalize());
+        let sec_websocket_accept = STANDARD.encode(digest.finalize());
 
         let response = Response::builder()
             .version(Version::HTTP_11)
@@ -417,7 +418,7 @@ where
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(digest.finalize());
+        let sec_websocket_accept = STANDARD.encode(digest.finalize());
 
         let mut response = Response::builder()
             .version(Version::HTTP_11)
@@ -601,7 +602,7 @@ where
         Digest::update(&mut digest, key);
         Digest::update(&mut digest, ACCEPT_KEY);
 
-        let sec_websocket_accept = base64::encode(digest.finalize());
+        let sec_websocket_accept = STANDARD.encode(digest.finalize());
 
         let mut response = Response::builder()
             .version(Version::HTTP_11)

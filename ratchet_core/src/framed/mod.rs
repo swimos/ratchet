@@ -44,6 +44,7 @@ pub enum Item {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug)]
     pub struct CodecFlags: u8 {
         const R_CONT    = 0b0000_0001;
         // If high 'text' else 'binary
@@ -56,7 +57,7 @@ bitflags::bitflags! {
         const RSV1      = 0b0100_0000;
         const RSV2      = 0b0010_0000;
         const RSV3      = 0b0001_0000;
-        const RESERVED  = Self::RSV1.bits | Self::RSV2.bits | Self::RSV3.bits;
+        const RESERVED  = Self::RSV1.bits() | Self::RSV2.bits() | Self::RSV3.bits();
     }
 }
 
@@ -579,8 +580,9 @@ where
         .await
     }
 
-    pub async fn close(&mut self) {
-        let _r = self.io.shutdown().await;
+    pub async fn shutdown(&mut self) -> Result<(), Error> {
+        self.io.shutdown().await?;
+        Ok(())
     }
 }
 
