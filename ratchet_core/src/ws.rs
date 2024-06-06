@@ -19,8 +19,10 @@ use crate::protocol::{
     CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
     Role,
 };
-use crate::{WebSocketConfig, WebSocketStream};
+use crate::{CloseCode, WebSocketConfig, WebSocketStream};
 use bytes::BytesMut;
+use futures_util::future::BoxFuture;
+use futures_util::TryFutureExt;
 use log::{error, trace};
 use ratchet_ext::{Extension, ExtensionEncoder, FrameHeader as ExtFrameHeader};
 
@@ -210,11 +212,30 @@ where
                     }
                     Ok(Message::Pong(payload.freeze()))
                 }
-                Item::Close(reason) => close(close_state, framed, reason, None).await,
+                Item::Close(reason) => {
+                    let is_server = framed.is_server();
+                    let code = reason
+                        .as_ref()
+                        .map(|reason| reason.code)
+                        .unwrap_or(CloseCode::Normal);
+
+                    let current_close_state = *close_state;
+                    *close_state = CloseState::Closed;
+
+                    close(framed, is_server, current_close_state, code).await?;
+                    Ok(Message::Close(reason))
+                }
             },
             Err(e) => {
                 error!("WebSocket read failure: {:?}", e);
-                close(close_state, framed, None, Some(e)).await
+
+                let is_server = framed.is_server();
+
+                // We want to close the connection but return the error produced during the session,
+                // not any during the close sequence.
+                let _ = close(framed, is_server, *close_state, CloseCode::Protocol).await;
+                *close_state = CloseState::Closed;
+                Err(e)
             }
         }
     }
@@ -333,6 +354,21 @@ where
             .await
     }
 
+    /// Flushes the WebSocket's output stream, ensuring that all intermediately buffered contents
+    /// reach their destination.
+    ///
+    /// # Errors
+    ///
+    /// It is considered an error if not all bytes could be written due to I/O errors or EOF being
+    /// reached.
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        if self.is_closed() {
+            return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
+        }
+
+        self.framed.flush().await
+    }
+
     /// Returns whether this WebSocket is closed.
     pub fn is_closed(&self) -> bool {
         self.close_state == CloseState::Closed
@@ -375,63 +411,71 @@ where
     }
 }
 
-async fn close<S>(
-    close_state: &mut CloseState,
-    framed: &mut FramedIo<S>,
-    reason: Option<CloseReason>,
-    ret: Option<Error>,
-) -> Result<Message, Error>
+/// Trait for closing a WebSocket connection. This is to abstract over both owned and split
+/// WebSockets.
+pub trait WebSocketClose {
+    /// Write a WebSocket close frame. The frame *must* have the FIN flag set high and be
+    /// uncompressed.
+    fn write_close_frame(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>>;
+
+    /// Shutdown the connection's underlying IO.
+    fn shutdown(&mut self) -> BoxFuture<Result<(), Error>>;
+}
+
+impl<S> WebSocketClose for FramedIo<S>
 where
     S: WebSocketStream,
 {
-    let server = framed.is_server();
-    match *close_state {
-        CloseState::NotClosed => {
-            let mut code = match &reason {
-                Some(reason) => u16::from(reason.code).to_be_bytes(),
-                None => [0; 2],
-            };
+    fn write_close_frame(&mut self, code: CloseCode) -> BoxFuture<Result<(), Error>> {
+        Box::pin(async move {
+            self.write(
+                OpCode::ControlCode(ControlCode::Close),
+                HeaderFlags::FIN,
+                &mut u16::from(code).to_be_bytes(),
+                |_, _| Ok(()),
+            )
+            .await
+        })
+    }
 
+    fn shutdown(&mut self) -> BoxFuture<Result<(), Error>> {
+        Box::pin(FramedIo::shutdown(self).map_err(Into::into))
+    }
+}
+
+pub async fn close(
+    closer: &mut impl WebSocketClose,
+    is_server: bool,
+    close_state: CloseState,
+    code: CloseCode,
+) -> Result<(), Error> {
+    match close_state {
+        CloseState::NotClosed => {
             // we don't want to immediately await the echoed close frame as the peer may elect to
             // drain any pending messages **before** echoing the close frame
 
-            let write_result = framed
-                .write(
-                    OpCode::ControlCode(ControlCode::Close),
-                    HeaderFlags::FIN,
-                    &mut code,
-                    |_, _| Ok(()),
-                )
-                .await;
-            match write_result {
-                Ok(()) => *close_state = CloseState::Closing,
-                Err(_) => {
-                    if server {
-                        // 7.1.1: the TCP stream should be closed first by the server
-                        //
-                        // We aren't interested in any IO errors produced here as the peer *may* have
-                        // already closed the TCP stream.
-                        framed.close().await;
-                    }
-                    *close_state = CloseState::Closed;
-                }
-            }
-            match ret {
-                Some(err) => Err(err),
-                None => Ok(Message::Close(reason)),
-            }
-        }
-        CloseState::Closing => {
-            *close_state = CloseState::Closed;
-            if server {
+            let _ = closer.write_close_frame(code).await;
+
+            if is_server {
                 // 7.1.1: the TCP stream should be closed first by the server
                 //
                 // We aren't interested in any IO errors produced here as the peer *may* have
                 // already closed the TCP stream.
-                framed.close().await;
+                let _ = closer.shutdown().await;
             }
 
-            Err(ret.unwrap_or_else(|| Error::with_cause(ErrorKind::Close, CloseCause::Stopped)))
+            Ok(())
+        }
+        CloseState::Closing => {
+            if is_server {
+                // 7.1.1: the TCP stream should be closed first by the server
+                //
+                // We aren't interested in any IO errors produced here as the peer *may* have
+                // already closed the TCP stream.
+                let _ = closer.shutdown().await;
+            }
+
+            Err(Error::with_cause(ErrorKind::Close, CloseCause::Stopped))
         }
         CloseState::Closed => Err(Error::with_cause(ErrorKind::Close, CloseCause::Error)),
     }
@@ -805,5 +849,8 @@ mod tests {
             err.downcast_ref::<CloseCause>().unwrap(),
             &CloseCause::Error
         );
+
+        assert!(client.is_closed());
+        assert!(server.is_closed());
     }
 }

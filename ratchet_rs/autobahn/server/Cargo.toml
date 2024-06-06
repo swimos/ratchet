@@ -1,0 +1,9 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+utils = { path = "../utils" }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+anyhow = { workspace = true }

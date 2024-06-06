@@ -406,7 +406,7 @@ async fn close_then_err() {
 
 #[tokio::test]
 async fn reuse_after_closure() {
-    let ((mut client_tx, mut client_rx), (_server_tx, mut server_rx)) = fixture();
+    let ((mut client_tx, mut client_rx), (server_tx, mut server_rx)) = fixture();
     let reason = CloseReason::new(CloseCode::Normal, None);
 
     client_tx
@@ -439,4 +439,9 @@ async fn reuse_after_closure() {
         err.downcast_ref::<CloseCause>().unwrap(),
         &CloseCause::Error
     );
+
+    assert!(client_tx.is_closed());
+    assert!(client_rx.is_closed());
+    assert!(server_tx.is_closed());
+    assert!(server_rx.is_closed());
 }

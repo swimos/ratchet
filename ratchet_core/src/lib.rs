@@ -68,5 +68,5 @@ use tokio::io::{AsyncRead, AsyncWrite};
 pub(crate) type Request = http::Request<()>;
 
 /// A stream representing a WebSocket connection.
-pub trait WebSocketStream: AsyncRead + AsyncWrite + Unpin + 'static {}
-impl<S> WebSocketStream for S where S: AsyncRead + AsyncWrite + Unpin + 'static {}
+pub trait WebSocketStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
+impl<S> WebSocketStream for S where S: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
