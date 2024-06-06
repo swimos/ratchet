@@ -4,7 +4,9 @@
 
 .idea
 
-ratchet_rs/autobahn/client
-ratchet_rs/autobahn/server
-
 **/.DS_Store
+
+ratchet_rs/autobahn/client/results
+ratchet_rs/autobahn/server/results
+ratchet_rs/autobahn/split_client/results
+ratchet_rs/autobahn/split_server/results

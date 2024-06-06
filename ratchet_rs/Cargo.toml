@@ -37,6 +37,14 @@ name = "autobahn-server"
 required-features = ["deflate"]
 
 [[example]]
+name = "autobahn-split-client"
+required-features = ["deflate", "split"]
+
+[[example]]
+name = "autobahn-split-server"
+required-features = ["deflate", "split"]
+
+[[example]]
 name = "client"
 required-features = ["split"]
 

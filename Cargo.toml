@@ -4,7 +4,12 @@ members = [
     "ratchet_core",
     "ratchet_deflate",
     "ratchet_ext",
-    "ratchet_fixture"
+    "ratchet_fixture",
+    "ratchet_rs/autobahn/client",
+    "ratchet_rs/autobahn/server",
+    "ratchet_rs/autobahn/split_client",
+    "ratchet_rs/autobahn/split_server",
+    "ratchet_rs/autobahn/utils"
 ]
 
 [workspace.dependencies]

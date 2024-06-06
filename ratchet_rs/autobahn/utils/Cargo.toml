@@ -1,0 +1,10 @@
+[package]
+name = "utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ratchet_rs = { path = "../.." }
+tokio = { workspace = true, features = ["process", "macros", "time"] }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
