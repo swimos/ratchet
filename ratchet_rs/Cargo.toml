@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_rs"
-version = "0.4.2"
+version = "1.0.0"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 description = "Async WebSocket implementation"
@@ -17,9 +17,9 @@ split = ["ratchet_core/split"]
 fixture = ["ratchet_core/fixture"]
 
 [dependencies]
-ratchet_core = { version = "0.4.2", path = "../ratchet_core" }
-ratchet_ext = { version = "0.4.2", path = "../ratchet_ext" }
-ratchet_deflate = { version = "0.4.2", path = "../ratchet_deflate", optional = true }
+ratchet_core = { version = "1.0.0", path = "../ratchet_core" }
+ratchet_ext = { version = "1.0.0", path = "../ratchet_ext" }
+ratchet_deflate = { version = "1.0.0", path = "../ratchet_deflate", optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 log = { workspace = true }
 
@@ -35,6 +35,14 @@ required-features = ["deflate"]
 [[example]]
 name = "autobahn-server"
 required-features = ["deflate"]
+
+[[example]]
+name = "autobahn-split-client"
+required-features = ["deflate", "split"]
+
+[[example]]
+name = "autobahn-split-server"
+required-features = ["deflate", "split"]
 
 [[example]]
 name = "client"

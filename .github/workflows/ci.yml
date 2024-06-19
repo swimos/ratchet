@@ -1,4 +1,7 @@
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: main
 
 name: Continuous integration
 
@@ -11,14 +14,14 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.65
           override: true
       - uses: actions-rs/cargo@v1
         with:
           command: check
 
-  test:
-    name: Test Suite
+  testmsrv:
+    name: Test Suite Latest
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -31,12 +34,33 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.78.0
           override: true
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --workspace
+          args: --all-features --all-targets --workspace
+
+  testlatest:
+    name: Test Suite MSRV
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --all-targets  --workspace
 
   fmt:
     name: Rustfmt
@@ -46,7 +70,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.65
           override: true
       - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
@@ -62,10 +86,70 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.69.0
+          toolchain: 1.65
           override: true
       - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: --all-features --workspace -- -D warnings
+
+  autobahnclient:
+    name: Autobahn Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin client --release
+
+  autobahnserver:
+    name: Autobahn Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin server --release
+
+  autobahnclientsplit:
+    name: Autobahn Client Split Socket
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin split_client --release
+
+  autobahnserversplit:
+    name: Autobahn Server Split Socket
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin split_server --release
