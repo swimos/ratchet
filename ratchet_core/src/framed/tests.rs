@@ -200,7 +200,7 @@ where
 
 #[tokio::test]
 async fn ping() {
-    let buffer = BytesMut::from_iter(&[137, 4, 1, 2, 3, 4]);
+    let buffer = BytesMut::from_iter([137, 4, 1, 2, 3, 4]);
     let mut framed = FramedIo::new(EmptyIo, buffer, Role::Client, usize::MAX, 0);
 
     ok_eq(
@@ -211,7 +211,7 @@ async fn ping() {
 
 #[tokio::test]
 async fn pong() {
-    let buffer = BytesMut::from_iter(&[138, 4, 1, 2, 3, 4]);
+    let buffer = BytesMut::from_iter([138, 4, 1, 2, 3, 4]);
     let mut framed = FramedIo::new(EmptyIo, buffer, Role::Client, usize::MAX, 0);
 
     ok_eq(

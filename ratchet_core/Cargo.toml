@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_core"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 description = "Async WebSocket implementation"
@@ -16,7 +16,7 @@ split = ["futures"]
 fixture = []
 
 [dependencies]
-ratchet_ext = { version = "1.0.0", path = "../ratchet_ext" }
+ratchet_ext = { version = "1.0.1", path = "../ratchet_ext" }
 url = { workspace = true }
 http = { workspace = true }
 tokio = { workspace = true, features = ["rt", "net", "io-util"] }

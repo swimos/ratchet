@@ -163,7 +163,7 @@ mod decode {
 
     #[test]
     fn header() {
-        let bytes = BytesMut::from_iter(&[129, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([129, 4, 1, 2, 3, 4]);
         let (header, _header_len, _payload_len) =
             FrameHeader::read_from(&bytes, false, 0, usize::MAX)
                 .unwrap()
@@ -181,15 +181,15 @@ mod decode {
 
     #[test]
     fn rsv() {
-        let bytes = BytesMut::from_iter(&[161, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([161, 4, 1, 2, 3, 4]);
         let r = FrameHeader::read_from(&bytes, false, 0, usize::MAX);
         expect_protocol_error(r, ProtocolError::UnknownExtension);
 
-        let bytes = BytesMut::from_iter(&[161, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([161, 4, 1, 2, 3, 4]);
         let r = FrameHeader::read_from(&bytes, false, 1 << 6 & 1 << 4, usize::MAX);
         expect_protocol_error(r, ProtocolError::UnknownExtension);
 
-        let bytes = BytesMut::from_iter(&[193, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([193, 4, 1, 2, 3, 4]);
         let result = FrameHeader::read_from(&bytes, false, 1 << 6, usize::MAX);
 
         let _expected = FrameHeader {
@@ -202,28 +202,28 @@ mod decode {
 
     #[test]
     fn overflow() {
-        let bytes = BytesMut::from_iter(&[129, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([129, 4, 1, 2, 3, 4]);
         let r = FrameHeader::read_from(&bytes, false, 0, 1);
         expect_protocol_error(r, ProtocolError::FrameOverflow);
     }
 
     #[test]
     fn fragmented_control() {
-        let bytes = BytesMut::from_iter(&[8, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([8, 4, 1, 2, 3, 4]);
         let r = FrameHeader::read_from(&bytes, false, 0, usize::MAX);
         expect_protocol_error(r, ProtocolError::FragmentedControl);
     }
 
     #[test]
     fn unmasked() {
-        let bytes = BytesMut::from_iter(&[1, 132, 0, 0, 0, 0, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([1, 132, 0, 0, 0, 0, 1, 2, 3, 4]);
         let r = FrameHeader::read_from(&bytes, false, 0, usize::MAX);
         expect_protocol_error(r, ProtocolError::MaskedFrame);
     }
 
     #[test]
     fn masked_err() {
-        let bytes = BytesMut::from_iter(&[129, 4, 1, 2, 3, 4]);
+        let bytes = BytesMut::from_iter([129, 4, 1, 2, 3, 4]);
         let r = FrameHeader::read_from(&bytes, true, 0, usize::MAX);
         expect_protocol_error(r, ProtocolError::UnmaskedFrame);
     }

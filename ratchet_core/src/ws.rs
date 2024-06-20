@@ -173,6 +173,12 @@ where
     /// continuation, this function will then yield `Message::Ping` and the `read_buffer` will
     /// contain the data received up to that point. The callee must ensure that the contents of
     /// `read_buffer` are **not** then modified before calling `read` again.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then both `buf` and the connection state are undefined. It may not be possible to recover
+    /// the connection due the read operation partially completing and the state has been lost.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
         if self.is_closed() {
             return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
@@ -240,7 +246,14 @@ where
         }
     }
 
-    /// Constructs a new text WebSocket message with a payload of `data`.
+    /// Sends a new text WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the frame and the state of the write
+    /// operation has been lost.
     pub async fn write_text<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<str>,
@@ -248,7 +261,14 @@ where
         self.write(data.as_ref(), PayloadType::Text).await
     }
 
-    /// Constructs a new binary WebSocket message with a payload of `data`.
+    /// Sends a new binary WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the frame and the state of the write
+    /// operation has been lost.
     pub async fn write_binary<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -256,7 +276,14 @@ where
         self.write(data.as_ref(), PayloadType::Binary).await
     }
 
-    /// Constructs a new ping WebSocket message with a payload of `data`.
+    /// Sends a new ping WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the control frame and the state of the write
+    /// operation has been lost.
     pub async fn write_ping<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -264,7 +291,14 @@ where
         self.write(data.as_ref(), PayloadType::Ping).await
     }
 
-    /// Constructs a new pong WebSocket message with a payload of `data`.
+    /// Sends a new pong WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the control frame and the state of the write
+    /// operation has been lost.
     pub async fn write_pong<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -272,7 +306,13 @@ where
         self.write(data.as_ref(), PayloadType::Pong).await
     }
 
-    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf.
+    /// Sends a new WebSocket message of `message_type` and with a payload of `buf`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then both `buf` and the connection state are undefined. It may not be possible to recover
+    /// the connection due the read operation partially completing and the state has been lost.
     pub async fn write<A>(&mut self, buf: A, message_type: PayloadType) -> Result<(), Error>
     where
         A: AsRef<[u8]>,
@@ -321,6 +361,13 @@ where
     /// Close this WebSocket with the reason provided.
     ///
     /// If the WebSocket is already closed then `Ok(())` is returned.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the close frame and the state of the write
+    /// operation has been lost.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
             return Ok(());
@@ -330,9 +377,16 @@ where
         self.framed.write_close(reason).await
     }
 
-    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf_ref` and
+    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf` and
     /// chunked by `fragment_size`. If the length of the buffer is less than the chunk size then
     /// only a single message is sent.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the buffer and the state of the write
+    /// operation has been lost.
     pub async fn write_fragmented<A>(
         &mut self,
         buf: A,
