@@ -176,11 +176,9 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `read_buffer` may have been
-    /// partially written to and a subsequent read call will fail due to the state of the read being
-    /// cleared. To use this function in this fashion, then create the future before the setup of
-    /// the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then both `buf` and the connection state are undefined. It may not be possible to recover
+    /// the connection due the read operation partially completing and the state has been lost.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
         if self.is_closed() {
             return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
@@ -252,10 +250,10 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `data` may have been
-    /// partially written. To use this function in this fashion, then create the future before the
-    /// setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the frame and the state of the write
+    /// operation has been lost.
     pub async fn write_text<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<str>,
@@ -267,10 +265,10 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `data` may have been
-    /// partially written. To use this function in this fashion, then create the future before the
-    /// setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the frame and the state of the write
+    /// operation has been lost.
     pub async fn write_binary<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -282,10 +280,10 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `data` may have been
-    /// partially written. To use this function in this fashion, then create the future before the
-    /// setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the control frame and the state of the write
+    /// operation has been lost.
     pub async fn write_ping<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -297,10 +295,10 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `data` may have been
-    /// partially written. To use this function in this fashion, then create the future before the
-    /// setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the control frame and the state of the write
+    /// operation has been lost.
     pub async fn write_pong<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -312,10 +310,9 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `buf` may have been
-    /// partially written. To use this function in this fashion, then create the future before the
-    /// setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then both `buf` and the connection state are undefined. It may not be possible to recover
+    /// the connection due the read operation partially completing and the state has been lost.
     pub async fn write<A>(&mut self, buf: A, message_type: PayloadType) -> Result<(), Error>
     where
         A: AsRef<[u8]>,
@@ -367,10 +364,10 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then the close frame may have
-    /// been partially written. To use this function in this fashion, then create the future before
-    /// the setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the close frame and the state of the write
+    /// operation has been lost.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
             return Ok(());
@@ -386,10 +383,10 @@ where
     ///
     /// # Cancel safety
     ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then `buf` may have been
-    /// partially written. To use this function in this fashion, then create the future before the
-    /// setup of the macro and poll it until completion.
+    /// This function is not cancellation safe. If the future is dropped before it has completed
+    /// then the connection state is undefined. It may not be possible to recover the connection due
+    /// the write operation having written only part of the buffer and the state of the write
+    /// operation has been lost.
     pub async fn write_fragmented<A>(
         &mut self,
         buf: A,
@@ -418,13 +415,6 @@ where
     ///
     /// It is considered an error if not all bytes could be written due to I/O errors or EOF being
     /// reached.
-    ///
-    /// # Cancel safety
-    ///
-    /// This function is not cancellation safe. If the function is called as part of a Tokio or
-    /// Futures `select!` macro and another branch completes first, then any intermediately buffered
-    /// contents may have been partially written. To use this function in this fashion, then create
-    /// the future before the setup of the macro and poll it until completion.
     pub async fn flush(&mut self) -> Result<(), Error> {
         if self.is_closed() {
             return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
