@@ -6,33 +6,20 @@ on:
 name: Continuous integration
 
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-
   docs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: RUSTDOCFLAGS="--cfg docsrs -Dwarnings" cargo doc --lib --no-deps --all-features --workspace
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Documentation
+        run: cargo doc --lib --no-deps --all-features --workspace
+        env:
+          RUSTDOCFLAGS: --cfg docsrs -Dwarnings
 
   testmsrv:
     name: Test Suite Latest
@@ -45,15 +32,13 @@ jobs:
           - macos-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: 1.78.0
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --all-targets --workspace
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --all-features --all-targets --workspace
 
   testlatest:
     name: Test Suite MSRV
@@ -66,104 +51,84 @@ jobs:
           - macos-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --all-targets  --workspace
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --all-features --all-targets --workspace
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: 1.65
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-features --workspace -- -D warnings
+          toolchain: 1.65.0
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-features --all-targets --workspace -- -D warnings
 
   autobahnclient:
     name: Autobahn Client
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin client --release
+          toolchain: 1.65.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --bin client --release
 
   autobahnserver:
     name: Autobahn Server
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin server --release
+          toolchain: 1.65.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --bin server --release
 
   autobahnclientsplit:
     name: Autobahn Client Split Socket
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin split_client --release
+          toolchain: 1.65.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --bin split_client --release
 
   autobahnserversplit:
     name: Autobahn Server Split Socket
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: 1.65
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin split_server --release
+          toolchain: 1.65.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --bin split_server --release
