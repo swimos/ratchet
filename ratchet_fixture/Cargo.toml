@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_fixture"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Ratchet fixture"
 keywords = ["websocket", "async", "futures", "tokio"]
@@ -10,7 +10,7 @@ readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
 
 [dependencies]
-ratchet = { package = "ratchet_rs", version = "1.0.0", path = "../ratchet_rs", features = ["split", "deflate", "fixture"] }
+ratchet = { package = "ratchet_rs", version = "1.0.1", path = "../ratchet_rs", features = ["split", "deflate", "fixture"] }
 tokio = { workspace = true, features = ["io-util"] }
 bytes = { workspace = true }
 futures = { workspace = true }

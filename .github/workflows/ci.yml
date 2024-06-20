@@ -20,6 +20,20 @@ jobs:
         with:
           command: check
 
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.65
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: RUSTDOCFLAGS="--cfg docsrs -Dwarnings" cargo doc --lib --no-deps --all-features --workspace
+
   testmsrv:
     name: Test Suite Latest
     runs-on: ${{ matrix.os }}

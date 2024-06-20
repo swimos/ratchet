@@ -173,6 +173,14 @@ where
     /// continuation, this function will then yield `Message::Ping` and the `read_buffer` will
     /// contain the data received up to that point. The callee must ensure that the contents of
     /// `read_buffer` are **not** then modified before calling `read` again.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `read_buffer` may have been
+    /// partially written to and a subsequent read call will fail due to the state of the read being
+    /// cleared. To use this function in this fashion, then create the future before the setup of
+    /// the macro and poll it until completion.
     pub async fn read(&mut self, read_buffer: &mut BytesMut) -> Result<Message, Error> {
         if self.is_closed() {
             return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));
@@ -240,7 +248,14 @@ where
         }
     }
 
-    /// Constructs a new text WebSocket message with a payload of `data`.
+    /// Sends a new text WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `data` may have been
+    /// partially written. To use this function in this fashion, then create the future before the
+    /// setup of the macro and poll it until completion.
     pub async fn write_text<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<str>,
@@ -248,7 +263,14 @@ where
         self.write(data.as_ref(), PayloadType::Text).await
     }
 
-    /// Constructs a new binary WebSocket message with a payload of `data`.
+    /// Sends a new binary WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `data` may have been
+    /// partially written. To use this function in this fashion, then create the future before the
+    /// setup of the macro and poll it until completion.
     pub async fn write_binary<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -256,7 +278,14 @@ where
         self.write(data.as_ref(), PayloadType::Binary).await
     }
 
-    /// Constructs a new ping WebSocket message with a payload of `data`.
+    /// Sends a new ping WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `data` may have been
+    /// partially written. To use this function in this fashion, then create the future before the
+    /// setup of the macro and poll it until completion.
     pub async fn write_ping<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -264,7 +293,14 @@ where
         self.write(data.as_ref(), PayloadType::Ping).await
     }
 
-    /// Constructs a new pong WebSocket message with a payload of `data`.
+    /// Sends a new pong WebSocket message with a payload of `data`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `data` may have been
+    /// partially written. To use this function in this fashion, then create the future before the
+    /// setup of the macro and poll it until completion.
     pub async fn write_pong<I>(&mut self, data: I) -> Result<(), Error>
     where
         I: AsRef<[u8]>,
@@ -272,7 +308,14 @@ where
         self.write(data.as_ref(), PayloadType::Pong).await
     }
 
-    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf.
+    /// Sends a new WebSocket message of `message_type` and with a payload of `buf`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `buf` may have been
+    /// partially written. To use this function in this fashion, then create the future before the
+    /// setup of the macro and poll it until completion.
     pub async fn write<A>(&mut self, buf: A, message_type: PayloadType) -> Result<(), Error>
     where
         A: AsRef<[u8]>,
@@ -321,6 +364,13 @@ where
     /// Close this WebSocket with the reason provided.
     ///
     /// If the WebSocket is already closed then `Ok(())` is returned.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then the close frame may have
+    /// been partially written. To use this function in this fashion, then create the future before
+    /// the setup of the macro and poll it until completion.
     pub async fn close(&mut self, reason: CloseReason) -> Result<(), Error> {
         if !self.is_active() {
             return Ok(());
@@ -330,9 +380,16 @@ where
         self.framed.write_close(reason).await
     }
 
-    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf_ref` and
+    /// Constructs a new WebSocket message of `message_type` and with a payload of `buf` and
     /// chunked by `fragment_size`. If the length of the buffer is less than the chunk size then
     /// only a single message is sent.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then `buf` may have been
+    /// partially written. To use this function in this fashion, then create the future before the
+    /// setup of the macro and poll it until completion.
     pub async fn write_fragmented<A>(
         &mut self,
         buf: A,
@@ -361,6 +418,13 @@ where
     ///
     /// It is considered an error if not all bytes could be written due to I/O errors or EOF being
     /// reached.
+    ///
+    /// # Cancel safety
+    ///
+    /// This function is not cancellation safe. If the function is called as part of a Tokio or
+    /// Futures `select!` macro and another branch completes first, then any intermediately buffered
+    /// contents may have been partially written. To use this function in this fashion, then create
+    /// the future before the setup of the macro and poll it until completion.
     pub async fn flush(&mut self) -> Result<(), Error> {
         if self.is_closed() {
             return Err(Error::with_cause(ErrorKind::Close, CloseCause::Error));

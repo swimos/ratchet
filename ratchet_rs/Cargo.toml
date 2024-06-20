@@ -1,6 +1,6 @@
 [package]
 name = "ratchet_rs"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 description = "Async WebSocket implementation"
@@ -17,9 +17,9 @@ split = ["ratchet_core/split"]
 fixture = ["ratchet_core/fixture"]
 
 [dependencies]
-ratchet_core = { version = "1.0.0", path = "../ratchet_core" }
-ratchet_ext = { version = "1.0.0", path = "../ratchet_ext" }
-ratchet_deflate = { version = "1.0.0", path = "../ratchet_deflate", optional = true }
+ratchet_core = { version = "1.0.1", path = "../ratchet_core" }
+ratchet_ext = { version = "1.0.1", path = "../ratchet_ext" }
+ratchet_deflate = { version = "1.0.1", path = "../ratchet_deflate", optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 log = { workspace = true }
 
