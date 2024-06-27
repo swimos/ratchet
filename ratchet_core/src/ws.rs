@@ -96,7 +96,6 @@ pub enum CloseState {
 
 impl<S, E> WebSocket<S, E>
 where
-    S: WebSocketStream,
     E: Extension,
 {
     #[cfg(feature = "split")]
@@ -144,7 +143,13 @@ where
             close_state: CloseState::NotClosed,
         }
     }
+}
 
+impl<S, E> WebSocket<S, E>
+where
+    S: WebSocketStream,
+    E: Extension,
+{
     /// Returns the role of this WebSocket.
     pub fn role(&self) -> Role {
         if self.framed.is_server() {
