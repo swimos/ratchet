@@ -433,10 +433,7 @@ pub struct FramedIo<I> {
     max_message_size: usize,
 }
 
-impl<I> FramedIo<I>
-where
-    I: WebSocketStream,
-{
+impl<I> FramedIo<I> {
     #[cfg(feature = "split")]
     pub fn from_parts(parts: FramedIoParts<I>) -> FramedIo<I> {
         let FramedIoParts {
@@ -497,7 +494,12 @@ where
     pub fn is_server(&self) -> bool {
         self.flags.contains(CodecFlags::ROLE)
     }
+}
 
+impl<I> FramedIo<I>
+where
+    I: WebSocketStream,
+{
     pub async fn flush(&mut self) -> Result<(), Error> {
         self.io.flush().await?;
         Ok(())
