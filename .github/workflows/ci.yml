@@ -84,7 +84,7 @@ jobs:
           toolchain: 1.66.0
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run:
+      - run: |
           rustc -V
           cargo tree --all-features
           cargo clippy --all-features --all-targets --workspace -- -D warnings
