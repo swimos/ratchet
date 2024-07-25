@@ -86,7 +86,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: |
           rustc -V
-          cargo tree --all-features
+          cargo tree --edges all --depth 100
           cargo clippy --all-features --all-targets --workspace -- -D warnings
 
   autobahnclient:
