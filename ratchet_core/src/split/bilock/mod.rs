@@ -96,7 +96,7 @@ impl<T> BiLock<T> {
 
     /// Reunites two `BiLock`s that form a pair or returns an error if they do not guard the same
     /// value.
-    pub fn reunite(self, other: BiLock<T>) -> Result<T, ReuniteError<T>>
+    pub fn reunite(self, other: BiLock<T>) -> Result<T, ReuniteError<BiLock<T>>>
     where
         T: Unpin,
     {
@@ -151,7 +151,7 @@ impl<T: Unpin> DerefMut for BiLockGuard<'_, T> {
     }
 }
 
-pub struct ReuniteError<T>(pub BiLock<T>, pub BiLock<T>);
+pub struct ReuniteError<T>(pub T, pub T);
 
 impl<T> Debug for ReuniteError<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -160,7 +160,7 @@ impl<T> Debug for ReuniteError<T> {
 }
 
 impl<T> Display for ReuniteError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Attempted to reunite two BiLocks that don't form a pair")
     }
 }
