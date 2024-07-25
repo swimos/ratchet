@@ -57,7 +57,10 @@ jobs:
           toolchain: 1.65
       - uses: Swatinem/rust-cache@v2
       - name: Test
-        run: cargo test --all-features --all-targets --workspace
+        run: |
+          rustc -V
+          cargo tree --edges all --depth 100
+          cargo test --all-features --all-targets --workspace
 
   fmt:
     name: Rustfmt
@@ -84,10 +87,7 @@ jobs:
           toolchain: 1.66.0
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: |
-          rustc -V
-          cargo tree --edges all --depth 100
-          cargo clippy --all-features --all-targets --workspace -- -D warnings
+      - run: cargo clippy --all-features --all-targets --workspace -- -D warnings
 
   autobahnclient:
     name: Autobahn Client
