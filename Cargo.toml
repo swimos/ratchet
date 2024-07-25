@@ -13,6 +13,13 @@ members = [
     "ratchet_rs/autobahn/utils"
 ]
 
+[workspace.package]
+version = "1.0.2"
+authors = ["Swim Inc. developers info@swim.ai"]
+edition = "2021"
+categories = ["network-programming", "asynchronous", "web-programming::websocket"]
+license = "Apache-2.0"
+
 [workspace.dependencies]
 url = "2.1.1"
 http = "1.1.0"

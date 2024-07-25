@@ -1,14 +1,13 @@
 [package]
 name = "ratchet_deflate"
-version = "1.0.2"
-authors = ["Swim Inc. developers info@swim.ai"]
-edition = "2021"
 description = "Permessage Deflate for Ratchet"
-keywords = ["websocket", "async", "futures", "tokio", "deflate"]
-categories = ["network-programming", "asynchronous", "web-programming::websocket"]
-license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+categories.workspace = true
 
 [dependencies]
 ratchet_ext = { version = "1.0.2", path = "../ratchet_ext" }
