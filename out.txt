@@ -1,564 +1,193 @@
 client v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/client)
-├── anyhow feature "default"
-│   ├── anyhow v1.0.83
-│   └── anyhow feature "std"
-│       └── anyhow v1.0.83
-├── tokio feature "default"
-│   └── tokio v1.1.1
-│       ├── bytes feature "default"
-│       │   ├── bytes v1.6.0
-│       │   └── bytes feature "std"
-│       │       └── bytes v1.6.0
-│       ├── libc feature "default"
-│       │   ├── libc v0.2.154
-│       │   └── libc feature "std"
-│       │       └── libc v0.2.154
-│       ├── memchr feature "default"
-│       │   ├── memchr v2.7.2
-│       │   └── memchr feature "std"
-│       │       ├── memchr v2.7.2
-│       │       └── memchr feature "alloc"
-│       │           └── memchr v2.7.2
-│       ├── mio feature "default"
-│       │   └── mio v0.7.14
-│       │       ├── libc feature "default" (*)
-│       │       └── log feature "default"
-│       │           └── log v0.4.21
-│       ├── num_cpus feature "default"
-│       │   └── num_cpus v1.16.0
-│       │       └── libc feature "default" (*)
-│       ├── once_cell feature "default"
-│       │   ├── once_cell v1.19.0
-│       │   └── once_cell feature "std"
-│       │       ├── once_cell v1.19.0
-│       │       └── once_cell feature "alloc"
-│       │           ├── once_cell v1.19.0
-│       │           └── once_cell feature "race"
-│       │               └── once_cell v1.19.0
-│       ├── pin-project-lite feature "default"
-│       │   └── pin-project-lite v0.2.14
-│       ├── signal-hook-registry feature "default"
-│       │   └── signal-hook-registry v1.4.2
-│       │       └── libc feature "default" (*)
-│       └── tokio-macros feature "default"
-│           └── tokio-macros v1.8.2 (proc-macro)
-│               ├── proc-macro2 feature "default"
-│               │   ├── proc-macro2 v1.0.82
-│               │   │   └── unicode-ident feature "default"
-│               │   │       └── unicode-ident v1.0.12
-│               │   └── proc-macro2 feature "proc-macro"
-│               │       └── proc-macro2 v1.0.82 (*)
-│               ├── quote feature "default"
-│               │   ├── quote v1.0.36
-│               │   │   └── proc-macro2 v1.0.82 (*)
-│               │   └── quote feature "proc-macro"
-│               │       ├── quote v1.0.36 (*)
-│               │       └── proc-macro2 feature "proc-macro" (*)
-│               ├── syn feature "default"
-│               │   ├── syn v1.0.109
-│               │   │   ├── proc-macro2 v1.0.82 (*)
-│               │   │   ├── quote v1.0.36 (*)
-│               │   │   └── unicode-ident feature "default" (*)
-│               │   ├── syn feature "clone-impls"
-│               │   │   └── syn v1.0.109 (*)
-│               │   ├── syn feature "derive"
-│               │   │   └── syn v1.0.109 (*)
-│               │   ├── syn feature "parsing"
-│               │   │   └── syn v1.0.109 (*)
-│               │   ├── syn feature "printing"
-│               │   │   ├── syn v1.0.109 (*)
-│               │   │   └── syn feature "quote"
-│               │   │       └── syn v1.0.109 (*)
-│               │   └── syn feature "proc-macro"
-│               │       ├── syn v1.0.109 (*)
-│               │       ├── proc-macro2 feature "proc-macro" (*)
-│               │       ├── quote feature "proc-macro" (*)
-│               │       └── syn feature "quote" (*)
-│               └── syn feature "full"
-│                   └── syn v1.0.109 (*)
-│       [build-dependencies]
-│       └── autocfg feature "default"
-│           └── autocfg v1.3.0
-├── tokio feature "rt-multi-thread"
-│   ├── tokio v1.1.1 (*)
-│   ├── tokio feature "num_cpus"
-│   │   └── tokio v1.1.1 (*)
-│   └── tokio feature "rt"
-│       └── tokio v1.1.1 (*)
-└── utils feature "default" (command-line)
-    └── utils v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/utils)
-        ├── anyhow feature "default" (*)
-        ├── tokio feature "default" (*)
-        ├── tokio feature "macros"
-        │   ├── tokio v1.1.1 (*)
-        │   └── tokio feature "tokio-macros"
-        │       └── tokio v1.1.1 (*)
-        ├── tokio feature "process"
-        │   ├── tokio v1.1.1 (*)
-        │   ├── tokio feature "bytes"
-        │   │   └── tokio v1.1.1 (*)
-        │   ├── tokio feature "libc"
-        │   │   └── tokio v1.1.1 (*)
-        │   ├── tokio feature "mio"
-        │   │   └── tokio v1.1.1 (*)
-        │   ├── tokio feature "once_cell"
-        │   │   └── tokio v1.1.1 (*)
-        │   ├── tokio feature "signal-hook-registry"
-        │   │   └── tokio v1.1.1 (*)
-        │   ├── mio feature "os-poll"
-        │   │   └── mio v0.7.14 (*)
-        │   ├── mio feature "os-util"
-        │   │   ├── mio v0.7.14 (*)
-        │   │   └── mio feature "os-ext"
-        │   │       ├── mio v0.7.14 (*)
-        │   │       └── mio feature "os-poll" (*)
-        │   └── mio feature "uds"
-        │       ├── mio v0.7.14 (*)
-        │       └── mio feature "net"
-        │           └── mio v0.7.14 (*)
-        ├── tokio feature "time"
-        │   └── tokio v1.1.1 (*)
-        ├── ratchet_rs feature "default" (command-line)
-        │   └── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs)
-        │       ├── log feature "default" (*)
-        │       ├── ratchet_core feature "default" (command-line)
-        │       │   └── ratchet_core v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_core)
-        │       │       ├── tokio feature "default" (*)
-        │       │       ├── tokio feature "io-util"
-        │       │       │   ├── tokio v1.1.1 (*)
-        │       │       │   ├── tokio feature "bytes" (*)
-        │       │       │   └── tokio feature "memchr"
-        │       │       │       └── tokio v1.1.1 (*)
-        │       │       ├── tokio feature "net"
-        │       │       │   ├── tokio v1.1.1 (*)
-        │       │       │   ├── tokio feature "libc" (*)
-        │       │       │   ├── tokio feature "mio" (*)
-        │       │       │   ├── mio feature "os-poll" (*)
-        │       │       │   ├── mio feature "os-util" (*)
-        │       │       │   ├── mio feature "tcp"
-        │       │       │   │   ├── mio v0.7.14 (*)
-        │       │       │   │   └── mio feature "net" (*)
-        │       │       │   ├── mio feature "udp"
-        │       │       │   │   ├── mio v0.7.14 (*)
-        │       │       │   │   └── mio feature "net" (*)
-        │       │       │   └── mio feature "uds" (*)
-        │       │       ├── tokio feature "rt" (*)
-        │       │       ├── bytes feature "default" (*)
-        │       │       ├── log feature "default" (*)
-        │       │       ├── base64 feature "default"
-        │       │       │   ├── base64 v0.22.1
-        │       │       │   └── base64 feature "std"
-        │       │       │       ├── base64 v0.22.1
-        │       │       │       └── base64 feature "alloc"
-        │       │       │           └── base64 v0.22.1
-        │       │       ├── bitflags feature "default"
-        │       │       │   └── bitflags v2.6.0
-        │       │       ├── derive_more feature "default"
-        │       │       │   ├── derive_more v0.99.17 (proc-macro)
-        │       │       │   │   ├── proc-macro2 feature "default" (*)
-        │       │       │   │   ├── quote feature "default" (*)
-        │       │       │   │   ├── syn feature "default" (*)
-        │       │       │   │   └── convert_case feature "default"
-        │       │       │   │       └── convert_case v0.4.0
-        │       │       │   │   [build-dependencies]
-        │       │       │   │   └── rustc_version feature "default"
-        │       │       │   │       └── rustc_version v0.4.0
-        │       │       │   ├── derive_more feature "add"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "add_assign"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "as_mut"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "as_ref"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "constructor"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "deref"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "deref_mut"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "display"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits"
-        │       │       │   │       └── syn v1.0.109 (*)
-        │       │       │   ├── derive_more feature "error"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   ├── derive_more feature "from"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   ├── derive_more feature "from_str"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "index"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "index_mut"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "into"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   ├── derive_more feature "into_iterator"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "is_variant"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── derive_more feature "convert_case"
-        │       │       │   │       └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "iterator"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "mul"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   ├── derive_more feature "mul_assign"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   ├── derive_more feature "not"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   ├── derive_more feature "sum"
-        │       │       │   │   └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   ├── derive_more feature "try_into"
-        │       │       │   │   ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │   │   └── syn feature "extra-traits" (*)
-        │       │       │   └── derive_more feature "unwrap"
-        │       │       │       ├── derive_more v0.99.17 (proc-macro) (*)
-        │       │       │       ├── derive_more feature "convert_case" (*)
-        │       │       │       └── derive_more feature "rustc_version"
-        │       │       │           └── derive_more v0.99.17 (proc-macro) (*)
-        │       │       ├── either feature "default"
-        │       │       │   ├── either v1.11.0
-        │       │       │   └── either feature "use_std"
-        │       │       │       └── either v1.11.0
-        │       │       ├── fnv feature "default"
-        │       │       │   ├── fnv v1.0.7
-        │       │       │   └── fnv feature "std"
-        │       │       │       └── fnv v1.0.7
-        │       │       ├── futures feature "default"
-        │       │       │   ├── futures v0.3.30
-        │       │       │   │   ├── futures-core v0.3.30
-        │       │       │   │   ├── futures-executor v0.3.30
-        │       │       │   │   │   ├── futures-core v0.3.30
-        │       │       │   │   │   ├── futures-task v0.3.30
-        │       │       │   │   │   └── futures-util v0.3.30
-        │       │       │   │   ├── futures-io v0.3.30
-        │       │       │   │   ├── futures-sink v0.3.30
-        │       │       │   │   ├── futures-task v0.3.30
-        │       │       │   │   ├── futures-channel feature "sink"
-        │       │       │   │   │   ├── futures-channel v0.3.30
-        │       │       │   │   │   └── futures-channel feature "futures-sink"
-        │       │       │   │   └── futures-util feature "sink"
-        │       │       │   │       ├── futures-util v0.3.30 (*)
-        │       │       │   │       └── futures-util feature "futures-sink"
-        │       │       │   ├── futures feature "async-await"
-        │       │       │   │   ├── futures v0.3.30 (*)
-        │       │       │   │   ├── futures-util feature "async-await"
-        │       │       │   │   │   └── futures-util v0.3.30 (*)
-        │       │       │   │   └── futures-util feature "async-await-macro"
-        │       │       │   │       ├── futures-util v0.3.30 (*)
-        │       │       │   │       ├── futures-util feature "async-await" (*)
-        │       │       │   │       └── futures-util feature "futures-macro"
-        │       │       │   ├── futures feature "executor"
-        │       │       │   │   ├── futures v0.3.30 (*)
-        │       │       │   │   ├── futures feature "futures-executor"
-        │       │       │   │   │   └── futures v0.3.30 (*)
-        │       │       │   │   ├── futures feature "std"
-        │       │       │   │   │   ├── futures v0.3.30 (*)
-        │       │       │   │   │   ├── futures feature "alloc"
-        │       │       │   │   │   ├── futures-core feature "std"
-        │       │       │   │   │   ├── futures-sink feature "std"
-        │       │       │   │   │   ├── futures-task feature "std"
-        │       │       │   │   │   ├── futures-util feature "channel"
-        │       │       │   │   │   ├── futures-util feature "io"
-        │       │       │   │   │   ├── futures-util feature "std"
-        │       │       │   │   │   └── futures-io feature "std"
-        │       │       │   │   └── futures-executor feature "std"
-        │       │       │   │       ├── futures-executor v0.3.30 (*)
-        │       │       │   │       ├── futures-core feature "std" (*)
-        │       │       │   │       ├── futures-task feature "std" (*)
-        │       │       │   │       └── futures-util feature "std" (*)
-        │       │       │   └── futures feature "std" (*)
-        │       │       ├── futures-util feature "default"
-        │       │       │   ├── futures-util v0.3.30 (*)
-        │       │       │   ├── futures-util feature "async-await" (*)
-        │       │       │   ├── futures-util feature "async-await-macro" (*)
-        │       │       │   └── futures-util feature "std" (*)
-        │       │       ├── http feature "default"
-        │       │       │   ├── http v1.1.0
-        │       │       │   │   ├── bytes feature "default" (*)
-        │       │       │   │   ├── fnv feature "default" (*)
-        │       │       │   │   └── itoa feature "default"
-        │       │       │   │       └── itoa v1.0.11
-        │       │       │   └── http feature "std"
-        │       │       │       └── http v1.1.0 (*)
-        │       │       ├── httparse feature "default"
-        │       │       │   ├── httparse v1.8.0
-        │       │       │   └── httparse feature "std"
-        │       │       │       └── httparse v1.8.0
-        │       │       ├── rand feature "default"
-        │       │       │   ├── rand v0.8.5
-        │       │       │   │   ├── libc v0.2.154
-        │       │       │   │   ├── rand_chacha v0.3.1
-        │       │       │   │   │   ├── ppv-lite86 feature "simd"
-        │       │       │   │   │   └── rand_core feature "default"
-        │       │       │   │   └── rand_core feature "default" (*)
-        │       │       │   ├── rand feature "std"
-        │       │       │   │   ├── rand v0.8.5 (*)
-        │       │       │   │   ├── rand feature "alloc"
-        │       │       │   │   │   ├── rand v0.8.5 (*)
-        │       │       │   │   │   └── rand_core feature "alloc"
-        │       │       │   │   ├── rand feature "getrandom"
-        │       │       │   │   │   ├── rand v0.8.5 (*)
-        │       │       │   │   │   └── rand_core feature "getrandom"
-        │       │       │   │   ├── rand feature "libc"
-        │       │       │   │   │   └── rand v0.8.5 (*)
-        │       │       │   │   ├── rand feature "rand_chacha"
-        │       │       │   │   │   └── rand v0.8.5 (*)
-        │       │       │   │   ├── rand_chacha feature "std"
-        │       │       │   │   │   ├── rand_chacha v0.3.1 (*)
-        │       │       │   │   │   └── ppv-lite86 feature "std"
-        │       │       │   │   └── rand_core feature "std"
-        │       │       │   │       ├── rand_core v0.6.4
-        │       │       │   │       ├── rand_core feature "alloc" (*)
-        │       │       │   │       ├── rand_core feature "getrandom" (*)
-        │       │       │   │       └── getrandom feature "std"
-        │       │       │   └── rand feature "std_rng"
-        │       │       │       ├── rand v0.8.5 (*)
-        │       │       │       └── rand feature "rand_chacha" (*)
-        │       │       ├── rand feature "getrandom" (*)
-        │       │       ├── rand feature "small_rng"
-        │       │       │   └── rand v0.8.5 (*)
-        │       │       ├── rand feature "std" (*)
-        │       │       ├── ratchet_ext feature "default" (command-line)
-        │       │       │   └── ratchet_ext v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_ext)
-        │       │       │       ├── bytes feature "default" (*)
-        │       │       │       ├── http feature "default" (*)
-        │       │       │       └── httparse feature "default" (*)
-        │       │       ├── sha-1 feature "default"
-        │       │       │   ├── sha-1 v0.10.1
-        │       │       │   │   ├── cfg-if feature "default"
-        │       │       │   │   │   └── cfg-if v1.0.0
-        │       │       │   │   ├── cpufeatures feature "default"
-        │       │       │   │   │   └── cpufeatures v0.2.12
-        │       │       │   │   └── digest feature "default"
-        │       │       │   │       ├── digest v0.10.7
-        │       │       │   │       └── digest feature "core-api"
-        │       │       │   └── sha-1 feature "std"
-        │       │       │       ├── sha-1 v0.10.1 (*)
-        │       │       │       └── digest feature "std"
-        │       │       │           ├── digest v0.10.7 (*)
-        │       │       │           ├── digest feature "alloc"
-        │       │       │           └── crypto-common feature "std"
-        │       │       ├── thiserror feature "default"
-        │       │       │   └── thiserror v1.0.60
-        │       │       │       └── thiserror-impl feature "default"
-        │       │       │           └── thiserror-impl v1.0.60 (proc-macro)
-        │       │       ├── tokio-util feature "codec"
-        │       │       │   └── tokio-util v0.6.9
-        │       │       │       ├── tokio feature "default" (*)
-        │       │       │       ├── tokio feature "sync"
-        │       │       │       │   └── tokio v1.1.1 (*)
-        │       │       │       ├── bytes feature "default" (*)
-        │       │       │       ├── log feature "default" (*)
-        │       │       │       ├── pin-project-lite feature "default" (*)
-        │       │       │       ├── futures-core feature "default"
-        │       │       │       │   ├── futures-core v0.3.30
-        │       │       │       │   └── futures-core feature "std" (*)
-        │       │       │       ├── futures-sink feature "default"
-        │       │       │       │   ├── futures-sink v0.3.30
-        │       │       │       │   └── futures-sink feature "std" (*)
-        │       │       │       └── futures-io feature "default"
-        │       │       │           ├── futures-io v0.3.30
-        │       │       │           └── futures-io feature "std" (*)
-        │       │       ├── tokio-util feature "compat"
-        │       │       │   ├── tokio-util v0.6.9 (*)
-        │       │       │   └── tokio-util feature "futures-io"
-        │       │       │       └── tokio-util v0.6.9 (*)
-        │       │       ├── tokio-util feature "default"
-        │       │       │   └── tokio-util v0.6.9 (*)
-        │       │       └── url feature "default"
-        │       │           └── url v2.5.0
-        │       │               ├── form_urlencoded feature "default"
-        │       │               │   ├── form_urlencoded v1.2.1
-        │       │               │   └── form_urlencoded feature "std"
-        │       │               ├── percent-encoding feature "default"
-        │       │               │   ├── percent-encoding v2.3.1
-        │       │               │   └── percent-encoding feature "std"
-        │       │               └── idna feature "default"
-        │       │                   ├── idna v0.5.0
-        │       │                   └── idna feature "std"
-        │       │       [dev-dependencies]
-        │       │       ├── tokio feature "default" (*)
-        │       │       ├── tokio feature "macros" (*)
-        │       │       ├── tokio feature "rt-multi-thread" (*)
-        │       │       ├── tokio feature "test-util"
-        │       │       │   └── tokio v1.1.1 (*)
-        │       │       ├── futures feature "default" (*)
-        │       │       └── futures-util feature "default" (*)
-        │       ├── ratchet_ext feature "default" (command-line) (*)
-        │       ├── ratchet_deflate feature "default" (command-line)
-        │       │   └── ratchet_deflate v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_deflate)
-        │       │       ├── bytes feature "default" (*)
-        │       │       ├── log feature "default" (*)
-        │       │       ├── http feature "default" (*)
-        │       │       ├── ratchet_ext feature "default" (command-line) (*)
-        │       │       ├── thiserror feature "default" (*)
-        │       │       ├── flate2 feature "default"
-        │       │       │   ├── flate2 v1.0.30
-        │       │       │   │   ├── libz-sys v1.1.16
-        │       │       │   │   │   [build-dependencies]
-        │       │       │   │   │   ├── cc feature "default"
-        │       │       │   │   │   ├── pkg-config feature "default"
-        │       │       │   │   │   └── vcpkg feature "default"
-        │       │       │   │   ├── crc32fast feature "default"
-        │       │       │   │   │   ├── crc32fast v1.4.0
-        │       │       │   │   │   └── crc32fast feature "std"
-        │       │       │   │   └── miniz_oxide feature "with-alloc"
-        │       │       │   │       └── miniz_oxide v0.7.2
-        │       │       │   └── flate2 feature "rust_backend"
-        │       │       │       ├── flate2 v1.0.30 (*)
-        │       │       │       ├── flate2 feature "any_impl"
-        │       │       │       │   └── flate2 v1.0.30 (*)
-        │       │       │       └── flate2 feature "miniz_oxide"
-        │       │       │           └── flate2 v1.0.30 (*)
-        │       │       └── flate2 feature "zlib"
-        │       │           ├── flate2 v1.0.30 (*)
-        │       │           ├── flate2 feature "any_zlib"
-        │       │           │   ├── flate2 v1.0.30 (*)
-        │       │           │   └── flate2 feature "any_impl" (*)
-        │       │           └── flate2 feature "libz-sys"
-        │       │               └── flate2 v1.0.30 (*)
-        │       ├── tracing-subscriber feature "default"
-        │       │   ├── tracing-subscriber v0.3.18
-        │       │   │   ├── tracing v0.1.40
-        │       │   │   │   ├── tracing-core v0.1.32
-        │       │   │   │   │   └── once_cell feature "default" (*)
-        │       │   │   │   └── pin-project-lite feature "default" (*)
-        │       │   │   ├── tracing-core v0.1.32 (*)
-        │       │   │   ├── once_cell feature "default" (*)
-        │       │   │   ├── matchers feature "default"
-        │       │   │   │   └── matchers v0.1.0
-        │       │   │   │       └── regex-automata feature "default"
-        │       │   │   │           ├── regex-automata v0.1.10
-        │       │   │   │           └── regex-automata feature "std"
-        │       │   │   ├── nu-ansi-term feature "default"
-        │       │   │   │   └── nu-ansi-term v0.46.0
-        │       │   │   │       └── overload feature "default"
-        │       │   │   │           └── overload v0.1.1
-        │       │   │   ├── regex feature "std"
-        │       │   │   │   ├── regex v1.10.4
-        │       │   │   │   │   ├── regex-syntax v0.8.3
-        │       │   │   │   │   ├── regex-automata feature "alloc"
-        │       │   │   │   │   │   └── regex-automata v0.4.6
-        │       │   │   │   │   ├── regex-automata feature "meta"
-        │       │   │   │   │   │   ├── regex-automata v0.4.6 (*)
-        │       │   │   │   │   │   ├── regex-automata feature "nfa-pikevm"
-        │       │   │   │   │   │   └── regex-automata feature "syntax"
-        │       │   │   │   │   ├── regex-automata feature "nfa-pikevm" (*)
-        │       │   │   │   │   └── regex-automata feature "syntax" (*)
-        │       │   │   │   ├── regex-automata feature "std"
-        │       │   │   │   │   ├── regex-automata v0.4.6 (*)
-        │       │   │   │   │   ├── regex-automata feature "alloc" (*)
-        │       │   │   │   │   └── regex-syntax feature "std"
-        │       │   │   │   │       └── regex-syntax v0.8.3
-        │       │   │   │   └── regex-syntax feature "std" (*)
-        │       │   │   ├── regex feature "unicode-case"
-        │       │   │   │   ├── regex v1.10.4 (*)
-        │       │   │   │   ├── regex-automata feature "unicode-case"
-        │       │   │   │   │   ├── regex-automata v0.4.6 (*)
-        │       │   │   │   │   └── regex-syntax feature "unicode-case"
-        │       │   │   │   │       └── regex-syntax v0.8.3
-        │       │   │   │   └── regex-syntax feature "unicode-case" (*)
-        │       │   │   ├── regex feature "unicode-perl"
-        │       │   │   │   ├── regex v1.10.4 (*)
-        │       │   │   │   ├── regex-automata feature "unicode-perl"
-        │       │   │   │   │   ├── regex-automata v0.4.6 (*)
-        │       │   │   │   │   └── regex-syntax feature "unicode-perl"
-        │       │   │   │   │       └── regex-syntax v0.8.3
-        │       │   │   │   ├── regex-automata feature "unicode-word-boundary"
-        │       │   │   │   │   └── regex-automata v0.4.6 (*)
-        │       │   │   │   └── regex-syntax feature "unicode-perl" (*)
-        │       │   │   ├── sharded-slab feature "default"
-        │       │   │   │   └── sharded-slab v0.1.7
-        │       │   │   │       └── lazy_static feature "default"
-        │       │   │   │           └── lazy_static v1.4.0
-        │       │   │   ├── smallvec feature "default"
-        │       │   │   │   └── smallvec v1.13.2
-        │       │   │   ├── thread_local feature "default"
-        │       │   │   │   └── thread_local v1.1.8
-        │       │   │   │       ├── once_cell feature "default" (*)
-        │       │   │   │       └── cfg-if feature "default" (*)
-        │       │   │   ├── tracing-log feature "log-tracer"
-        │       │   │   │   └── tracing-log v0.2.0
-        │       │   │   │       ├── log feature "default" (*)
-        │       │   │   │       ├── once_cell feature "default" (*)
-        │       │   │   │       └── tracing-core feature "default"
-        │       │   │   │           ├── tracing-core v0.1.32 (*)
-        │       │   │   │           └── tracing-core feature "std"
-        │       │   │   └── tracing-log feature "std"
-        │       │   │       ├── tracing-log v0.2.0 (*)
-        │       │   │       └── log feature "std"
-        │       │   │           └── log v0.4.21
-        │       │   ├── tracing-subscriber feature "ansi"
-        │       │   │   ├── tracing-subscriber v0.3.18 (*)
-        │       │   │   ├── tracing-subscriber feature "fmt"
-        │       │   │   │   ├── tracing-subscriber v0.3.18 (*)
-        │       │   │   │   ├── tracing-subscriber feature "registry"
-        │       │   │   │   │   ├── tracing-subscriber v0.3.18 (*)
-        │       │   │   │   │   ├── tracing-subscriber feature "sharded-slab"
-        │       │   │   │   │   │   └── tracing-subscriber v0.3.18 (*)
-        │       │   │   │   │   ├── tracing-subscriber feature "std"
-        │       │   │   │   │   │   ├── tracing-subscriber v0.3.18 (*)
-        │       │   │   │   │   │   ├── tracing-subscriber feature "alloc"
-        │       │   │   │   │   │   └── tracing-core feature "std" (*)
-        │       │   │   │   │   └── tracing-subscriber feature "thread_local"
-        │       │   │   │   │       └── tracing-subscriber v0.3.18 (*)
-        │       │   │   │   └── tracing-subscriber feature "std" (*)
-        │       │   │   └── tracing-subscriber feature "nu-ansi-term"
-        │       │   │       └── tracing-subscriber v0.3.18 (*)
-        │       │   ├── tracing-subscriber feature "fmt" (*)
-        │       │   ├── tracing-subscriber feature "smallvec"
-        │       │   │   └── tracing-subscriber v0.3.18 (*)
-        │       │   ├── tracing-subscriber feature "std" (*)
-        │       │   └── tracing-subscriber feature "tracing-log"
-        │       │       └── tracing-subscriber v0.3.18 (*)
-        │       └── tracing-subscriber feature "env-filter"
-        │           ├── tracing-subscriber v0.3.18 (*)
-        │           ├── tracing-subscriber feature "matchers"
-        │           │   └── tracing-subscriber v0.3.18 (*)
-        │           ├── tracing-subscriber feature "once_cell"
-        │           │   └── tracing-subscriber v0.3.18 (*)
-        │           ├── tracing-subscriber feature "regex"
-        │           │   └── tracing-subscriber v0.3.18 (*)
-        │           ├── tracing-subscriber feature "std" (*)
-        │           ├── tracing-subscriber feature "thread_local" (*)
-        │           └── tracing-subscriber feature "tracing"
-        │               └── tracing-subscriber v0.3.18 (*)
-        │       [dev-dependencies]
-        │       ├── tokio feature "default" (*)
-        │       ├── tokio feature "macros" (*)
-        │       ├── tokio feature "rt-multi-thread" (*)
-        │       ├── tokio feature "test-util" (*)
-        │       ├── bytes feature "default" (*)
-        │       ├── tokio-stream feature "default"
-        │       │   ├── tokio-stream v0.1.3
-        │       │   │   ├── tokio feature "default" (*)
-        │       │   │   ├── tokio feature "sync" (*)
-        │       │   │   ├── pin-project-lite feature "default" (*)
-        │       │   │   └── futures-core feature "default" (*)
-        │       │   └── tokio-stream feature "time"
-        │       │       ├── tokio-stream v0.1.3 (*)
-        │       │       └── tokio feature "time" (*)
-        │       └── tokio-stream feature "net"
-        │           ├── tokio-stream v0.1.3 (*)
-        │           └── tokio feature "net" (*)
-        └── serde_json feature "default"
-            ├── serde_json v1.0.117
-            │   ├── serde v1.0.202
-            │   ├── itoa feature "default" (*)
-            │   └── ryu feature "default"
-            │       └── ryu v1.0.18
-            └── serde_json feature "std"
-                ├── serde_json v1.0.117 (*)
-                └── serde feature "std"
-                    └── serde v1.0.202
+├── anyhow v1.0.83
+├── tokio v1.1.1
+│   ├── bytes v1.6.0
+│   ├── libc v0.2.154
+│   ├── memchr v2.7.2
+│   ├── mio v0.7.14
+│   │   ├── libc v0.2.154
+│   │   └── log v0.4.21
+│   ├── num_cpus v1.16.0
+│   │   └── libc v0.2.154
+│   ├── once_cell v1.19.0
+│   ├── pin-project-lite v0.2.14
+│   ├── signal-hook-registry v1.4.2
+│   │   └── libc v0.2.154
+│   └── tokio-macros v1.8.2 (proc-macro)
+│       ├── proc-macro2 v1.0.82
+│       │   └── unicode-ident v1.0.12
+│       ├── quote v1.0.36
+│       │   └── proc-macro2 v1.0.82 (*)
+│       └── syn v1.0.109
+│           ├── proc-macro2 v1.0.82 (*)
+│           ├── quote v1.0.36 (*)
+│           └── unicode-ident v1.0.12
+│   [build-dependencies]
+│   └── autocfg v1.3.0
+└── utils v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/utils)
+    ├── anyhow v1.0.83
+    ├── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs)
+    │   ├── log v0.4.21
+    │   ├── ratchet_core v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_core)
+    │   │   ├── base64 v0.22.1
+    │   │   ├── bitflags v2.6.0
+    │   │   ├── bytes v1.6.0
+    │   │   ├── derive_more v0.99.17 (proc-macro)
+    │   │   │   ├── convert_case v0.4.0
+    │   │   │   ├── proc-macro2 v1.0.82 (*)
+    │   │   │   ├── quote v1.0.36 (*)
+    │   │   │   └── syn v1.0.109 (*)
+    │   │   │   [build-dependencies]
+    │   │   │   └── rustc_version v0.4.0
+    │   │   │       └── semver v1.0.23
+    │   │   ├── either v1.11.0
+    │   │   ├── fnv v1.0.7
+    │   │   ├── futures v0.3.30
+    │   │   │   ├── futures-channel v0.3.30
+    │   │   │   │   ├── futures-core v0.3.30
+    │   │   │   │   └── futures-sink v0.3.30
+    │   │   │   ├── futures-core v0.3.30
+    │   │   │   ├── futures-executor v0.3.30
+    │   │   │   │   ├── futures-core v0.3.30
+    │   │   │   │   ├── futures-task v0.3.30
+    │   │   │   │   └── futures-util v0.3.30
+    │   │   │   │       ├── futures-channel v0.3.30 (*)
+    │   │   │   │       ├── futures-core v0.3.30
+    │   │   │   │       ├── futures-io v0.3.30
+    │   │   │   │       ├── futures-macro v0.3.30 (proc-macro)
+    │   │   │   │       │   ├── proc-macro2 v1.0.82 (*)
+    │   │   │   │       │   ├── quote v1.0.36 (*)
+    │   │   │   │       │   └── syn v2.0.63
+    │   │   │   │       │       ├── proc-macro2 v1.0.82 (*)
+    │   │   │   │       │       ├── quote v1.0.36 (*)
+    │   │   │   │       │       └── unicode-ident v1.0.12
+    │   │   │   │       ├── futures-sink v0.3.30
+    │   │   │   │       ├── futures-task v0.3.30
+    │   │   │   │       ├── memchr v2.7.2
+    │   │   │   │       ├── pin-project-lite v0.2.14
+    │   │   │   │       ├── pin-utils v0.1.0
+    │   │   │   │       └── slab v0.4.9
+    │   │   │   │           [build-dependencies]
+    │   │   │   │           └── autocfg v1.3.0
+    │   │   │   ├── futures-io v0.3.30
+    │   │   │   ├── futures-sink v0.3.30
+    │   │   │   ├── futures-task v0.3.30
+    │   │   │   └── futures-util v0.3.30 (*)
+    │   │   ├── futures-util v0.3.30 (*)
+    │   │   ├── http v1.1.0
+    │   │   │   ├── bytes v1.6.0
+    │   │   │   ├── fnv v1.0.7
+    │   │   │   └── itoa v1.0.11
+    │   │   ├── httparse v1.8.0
+    │   │   ├── log v0.4.21
+    │   │   ├── rand v0.8.5
+    │   │   │   ├── libc v0.2.154
+    │   │   │   ├── rand_chacha v0.3.1
+    │   │   │   │   ├── ppv-lite86 v0.2.17
+    │   │   │   │   └── rand_core v0.6.4
+    │   │   │   │       └── getrandom v0.2.15
+    │   │   │   │           ├── cfg-if v1.0.0
+    │   │   │   │           └── libc v0.2.154
+    │   │   │   └── rand_core v0.6.4 (*)
+    │   │   ├── ratchet_ext v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_ext)
+    │   │   │   ├── bytes v1.6.0
+    │   │   │   ├── http v1.1.0 (*)
+    │   │   │   └── httparse v1.8.0
+    │   │   ├── sha-1 v0.10.1
+    │   │   │   ├── cfg-if v1.0.0
+    │   │   │   ├── cpufeatures v0.2.12
+    │   │   │   │   └── libc v0.2.154
+    │   │   │   └── digest v0.10.7
+    │   │   │       ├── block-buffer v0.10.4
+    │   │   │       │   └── generic-array v0.14.7
+    │   │   │       │       └── typenum v1.17.0
+    │   │   │       │       [build-dependencies]
+    │   │   │       │       └── version_check v0.9.4
+    │   │   │       └── crypto-common v0.1.6
+    │   │   │           ├── generic-array v0.14.7 (*)
+    │   │   │           └── typenum v1.17.0
+    │   │   ├── thiserror v1.0.60
+    │   │   │   └── thiserror-impl v1.0.60 (proc-macro)
+    │   │   │       ├── proc-macro2 v1.0.82 (*)
+    │   │   │       ├── quote v1.0.36 (*)
+    │   │   │       └── syn v2.0.63 (*)
+    │   │   ├── tokio v1.1.1 (*)
+    │   │   ├── tokio-util v0.6.9
+    │   │   │   ├── bytes v1.6.0
+    │   │   │   ├── futures-core v0.3.30
+    │   │   │   ├── futures-io v0.3.30
+    │   │   │   ├── futures-sink v0.3.30
+    │   │   │   ├── log v0.4.21
+    │   │   │   ├── pin-project-lite v0.2.14
+    │   │   │   └── tokio v1.1.1 (*)
+    │   │   └── url v2.5.0
+    │   │       ├── form_urlencoded v1.2.1
+    │   │       │   └── percent-encoding v2.3.1
+    │   │       ├── idna v0.5.0
+    │   │       │   ├── unicode-bidi v0.3.15
+    │   │       │   └── unicode-normalization v0.1.23
+    │   │       │       └── tinyvec v1.6.0
+    │   │       │           └── tinyvec_macros v0.1.1
+    │   │       └── percent-encoding v2.3.1
+    │   │   [dev-dependencies]
+    │   │   ├── futures v0.3.30 (*)
+    │   │   ├── futures-util v0.3.30 (*)
+    │   │   └── tokio v1.1.1 (*)
+    │   ├── ratchet_deflate v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_deflate)
+    │   │   ├── bytes v1.6.0
+    │   │   ├── flate2 v1.0.30
+    │   │   │   ├── crc32fast v1.4.0
+    │   │   │   │   └── cfg-if v1.0.0
+    │   │   │   ├── libz-sys v1.1.16
+    │   │   │   │   [build-dependencies]
+    │   │   │   │   ├── cc v1.0.97
+    │   │   │   │   ├── pkg-config v0.3.30
+    │   │   │   │   └── vcpkg v0.2.15
+    │   │   │   └── miniz_oxide v0.7.2
+    │   │   │       └── adler v1.0.2
+    │   │   ├── http v1.1.0 (*)
+    │   │   ├── log v0.4.21
+    │   │   ├── ratchet_ext v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_ext) (*)
+    │   │   └── thiserror v1.0.60 (*)
+    │   ├── ratchet_ext v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_ext) (*)
+    │   └── tracing-subscriber v0.3.18
+    │       ├── matchers v0.1.0
+    │       │   └── regex-automata v0.1.10
+    │       │       └── regex-syntax v0.6.29
+    │       ├── nu-ansi-term v0.46.0
+    │       │   └── overload v0.1.1
+    │       ├── once_cell v1.19.0
+    │       ├── regex v1.10.4
+    │       │   ├── regex-automata v0.4.6
+    │       │   │   └── regex-syntax v0.8.3
+    │       │   └── regex-syntax v0.8.3
+    │       ├── sharded-slab v0.1.7
+    │       │   └── lazy_static v1.4.0
+    │       ├── smallvec v1.13.2
+    │       ├── thread_local v1.1.8
+    │       │   ├── cfg-if v1.0.0
+    │       │   └── once_cell v1.19.0
+    │       ├── tracing v0.1.40
+    │       │   ├── pin-project-lite v0.2.14
+    │       │   └── tracing-core v0.1.32
+    │       │       └── once_cell v1.19.0
+    │       ├── tracing-core v0.1.32 (*)
+    │       └── tracing-log v0.2.0
+    │           ├── log v0.4.21
+    │           ├── once_cell v1.19.0
+    │           └── tracing-core v0.1.32 (*)
+    │   [dev-dependencies]
+    │   ├── bytes v1.6.0
+    │   ├── tokio v1.1.1 (*)
+    │   └── tokio-stream v0.1.3
+    │       ├── futures-core v0.3.30
+    │       ├── pin-project-lite v0.2.14
+    │       └── tokio v1.1.1 (*)
+    ├── serde_json v1.0.117
+    │   ├── itoa v1.0.11
+    │   ├── ryu v1.0.18
+    │   └── serde v1.0.202
+    └── tokio v1.1.1 (*)
 
 ratchet_core v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_core) (*)
 
@@ -567,49 +196,28 @@ ratchet_deflate v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_deflate) (
 ratchet_ext v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_ext) (*)
 
 ratchet_fixture v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_fixture)
-├── tokio feature "default" (*)
-├── tokio feature "io-util" (*)
-├── bytes feature "default" (*)
-├── ratchet_rs feature "default" (command-line) (*)
-├── ratchet_rs feature "deflate"
-│   ├── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs) (*)
-│   └── ratchet_rs feature "ratchet_deflate"
-│       └── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs) (*)
-├── ratchet_rs feature "fixture"
-│   ├── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs) (*)
-│   └── ratchet_core feature "fixture"
-│       └── ratchet_core v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_core) (*)
-├── ratchet_rs feature "split"
-│   ├── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs) (*)
-│   └── ratchet_core feature "split"
-│       ├── ratchet_core v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_core) (*)
-│       └── ratchet_core feature "futures"
-│           └── ratchet_core v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_core) (*)
-└── futures feature "default" (*)
+├── bytes v1.6.0
+├── futures v0.3.30 (*)
+├── ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs) (*)
+└── tokio v1.1.1 (*)
 [dev-dependencies]
-├── tokio feature "default" (*)
-├── tokio feature "macros" (*)
-├── tokio feature "rt-multi-thread" (*)
-└── tokio feature "test-util" (*)
+└── tokio v1.1.1 (*)
 
 ratchet_rs v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs) (*)
 
 server v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/server)
-├── anyhow feature "default" (*)
-├── tokio feature "default" (*)
-├── tokio feature "rt-multi-thread" (*)
-└── utils feature "default" (command-line) (*)
+├── anyhow v1.0.83
+├── tokio v1.1.1 (*)
+└── utils v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/utils) (*)
 
 split_client v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/split_client)
-├── anyhow feature "default" (*)
-├── tokio feature "default" (*)
-├── tokio feature "rt-multi-thread" (*)
-└── utils feature "default" (command-line) (*)
+├── anyhow v1.0.83
+├── tokio v1.1.1 (*)
+└── utils v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/utils) (*)
 
 split_server v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/split_server)
-├── anyhow feature "default" (*)
-├── tokio feature "default" (*)
-├── tokio feature "rt-multi-thread" (*)
-└── utils feature "default" (command-line) (*)
+├── anyhow v1.0.83
+├── tokio v1.1.1 (*)
+└── utils v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/utils) (*)
 
 utils v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/utils) (*)
