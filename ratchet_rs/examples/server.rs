@@ -17,8 +17,7 @@ use ratchet_rs::{
     Error, Message, NoExtProvider, PayloadType, ProtocolRegistry, UpgradedServer, WebSocketConfig,
 };
 use tokio::net::TcpListener;
-use tokio_stream::wrappers::TcpListenerStream;
-use tokio_stream::StreamExt;
+use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
