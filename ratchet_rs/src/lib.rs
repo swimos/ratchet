@@ -19,7 +19,7 @@
 //! # Features
 //! - Implement your own own extensions using [ratchet_ext](../ratchet_ext).
 //! - Per-message deflate with [ratchet_deflate](../ratchet_deflate) or enable with the `deflate`
-//! feature.
+//!   feature.
 //! - Split WebSocket with the `split` feature.
 //!
 //! # Error handling
