@@ -1,14 +1,14 @@
 [package]
 name = "ratchet_ext"
-version = "1.0.2"
-authors = ["Swim Inc. developers info@swim.ai"]
-edition = "2021"
 description = "WebSocket extensions for Ratchet"
-keywords = ["websocket", "async", "futures", "tokio"]
-categories = ["network-programming", "asynchronous", "web-programming::websocket"]
-license = "Apache-2.0"
+keywords = ["websocket", "async", "futures", "tokio", "extensions"]
 readme = "README.md"
 repository = "https://github.com/swimos/ratchet/"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+categories.workspace = true
 
 [dependencies]
 http = { workspace = true }

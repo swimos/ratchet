@@ -1,11 +1,10 @@
 <a href="https://www.swimos.org"><img src="https://docs.swimos.org/readme/marlin-blue.svg" align="left"></a>
 <br><br><br>
 
-# Ratchet 🚧
+# Ratchet
 Ratchet is a fast, robust, lightweight and fully asynchronous implementation of [RFC6455](https://datatracker.ietf.org/doc/html/rfc6455) (The WebSocket protocol). Complete with an optional implementation of [RFC7692](https://datatracker.ietf.org/doc/html/rfc7692) (Compression Extensions For WebSocket).
 
-Ratchet has not been production tested yet, so use at your own risk and please report any issues that you have.
-
+Ratchet powers [SwimOS on Rust](https://github.com/swimos/swim-rust/); a framework for real-time streaming data applications.
 
 [![Crates.io][crates-badge]][crates-url]
 
@@ -147,9 +146,6 @@ loop {
     }
 }
 ```
-# Planned features
-- `futures-rs` `Sink` and `Stream` implementations.
-- `tokio` `AsyncRead` and `AsyncWrite` implementations.
 
 # License
 Ratchet is licensed under the [Apache License 2.0](LICENSE)
