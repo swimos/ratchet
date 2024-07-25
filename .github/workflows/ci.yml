@@ -38,10 +38,7 @@ jobs:
           toolchain: 1.78.0
       - uses: Swatinem/rust-cache@v2
       - name: Test
-        run: |
-          rustc -V
-          cargo tree --edges all --depth 100
-          cargo test --all-features --all-targets --workspace
+        run: cargo test --all-features --all-targets --workspace
 
   testlatest:
     name: Test Suite MSRV
