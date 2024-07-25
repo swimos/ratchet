@@ -9,5 +9,7 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "daily"
-#    ignore:
-#      - dependency-name: ""
+    ignore:
+      - dependency-name: "tokio"
+      - dependency-name: "tokio-util"
+      - dependency-name: "tokio-stream"
