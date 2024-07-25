@@ -112,14 +112,18 @@ client v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/client)
     │   │   │       ├── quote v1.0.36 (*)
     │   │   │       └── syn v2.0.63 (*)
     │   │   ├── tokio v1.1.1 (*)
-    │   │   ├── tokio-util v0.6.9
+    │   │   ├── tokio-util v0.6.0
     │   │   │   ├── bytes v1.6.0
     │   │   │   ├── futures-core v0.3.30
     │   │   │   ├── futures-io v0.3.30
     │   │   │   ├── futures-sink v0.3.30
     │   │   │   ├── log v0.4.21
     │   │   │   ├── pin-project-lite v0.2.14
-    │   │   │   └── tokio v1.1.1 (*)
+    │   │   │   ├── tokio v1.1.1 (*)
+    │   │   │   └── tokio-stream v0.1.2
+    │   │   │       ├── futures-core v0.3.30
+    │   │   │       ├── pin-project-lite v0.2.14
+    │   │   │       └── tokio v1.1.1 (*)
     │   │   └── url v2.5.0
     │   │       ├── form_urlencoded v1.2.1
     │   │       │   └── percent-encoding v2.3.1
@@ -138,13 +142,11 @@ client v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/client)
     │   │   ├── flate2 v1.0.30
     │   │   │   ├── crc32fast v1.4.0
     │   │   │   │   └── cfg-if v1.0.0
-    │   │   │   ├── libz-sys v1.1.16
-    │   │   │   │   [build-dependencies]
-    │   │   │   │   ├── cc v1.0.97
-    │   │   │   │   ├── pkg-config v0.3.30
-    │   │   │   │   └── vcpkg v0.2.15
-    │   │   │   └── miniz_oxide v0.7.2
-    │   │   │       └── adler v1.0.2
+    │   │   │   └── libz-sys v1.1.16
+    │   │   │       [build-dependencies]
+    │   │   │       ├── cc v1.0.97
+    │   │   │       ├── pkg-config v0.3.30
+    │   │   │       └── vcpkg v0.2.15
     │   │   ├── http v1.1.0 (*)
     │   │   ├── log v0.4.21
     │   │   ├── ratchet_ext v1.0.2 (/Users/sircipher/Desktop/work/ratchet/ratchet_ext) (*)
@@ -179,10 +181,7 @@ client v0.1.0 (/Users/sircipher/Desktop/work/ratchet/ratchet_rs/autobahn/client)
     │   [dev-dependencies]
     │   ├── bytes v1.6.0
     │   ├── tokio v1.1.1 (*)
-    │   └── tokio-stream v0.1.3
-    │       ├── futures-core v0.3.30
-    │       ├── pin-project-lite v0.2.14
-    │       └── tokio v1.1.1 (*)
+    │   └── tokio-stream v0.1.2 (*)
     ├── serde_json v1.0.117
     │   ├── itoa v1.0.11
     │   ├── ryu v1.0.18

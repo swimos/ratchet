@@ -15,5 +15,5 @@ ratchet_ext = { version = "1.0.2", path = "../ratchet_ext" }
 thiserror = { workspace = true }
 http = { workspace = true }
 bytes = { workspace = true }
-flate2 = { workspace = true, default-features = false, features = ["zlib"] }
+flate2 = { workspace = true, features = ["zlib"] }
 log = { workspace = true }
