@@ -10,7 +10,7 @@ license.workspace = true
 categories.workspace = true
 
 [dependencies]
-ratchet_ext = { version = "1.0.2", path = "../ratchet_ext" }
+ratchet_ext = { version = "1.0.3", path = "../ratchet_ext" }
 thiserror = { workspace = true }
 http = { workspace = true }
 bytes = { workspace = true }
