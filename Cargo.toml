@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.2"
+version = "1.0.3"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 categories = ["network-programming", "asynchronous", "web-programming::websocket"]
