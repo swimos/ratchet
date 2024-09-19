@@ -6,6 +6,7 @@ members = [
     "ratchet_deflate",
     "ratchet_ext",
     "ratchet_fixture",
+    "ratchet_axum",
     "ratchet_rs/autobahn/client",
     "ratchet_rs/autobahn/server",
     "ratchet_rs/autobahn/split_client",
@@ -43,3 +44,10 @@ flate2 = { version = "1.0", default-features = false }
 anyhow = "1.0"
 serde_json = "1.0"
 tracing-subscriber = "0.3.18"
+hyper = "1.4.1"
+axum = "0.7.5"
+axum-core = "0.4.3"
+eyre = "0.6.12"
+hyper-util = "0.1.0"
+pin-project = "1.1.5"
+async-trait = "0.1.79"

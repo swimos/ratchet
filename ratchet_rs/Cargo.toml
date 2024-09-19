@@ -15,11 +15,15 @@ default = []
 deflate = ["ratchet_deflate"]
 split = ["ratchet_core/split"]
 fixture = ["ratchet_core/fixture"]
+with_axum = ["ratchet_axum", "axum", "hyper"]
 
 [dependencies]
+axum = { workspace = true, optional = true }
+hyper = { workspace = true, features = ["http1", "server", "client"], optional = true }
 ratchet_core = { version = "1.0.3", path = "../ratchet_core" }
 ratchet_ext = { version = "1.0.3", path = "../ratchet_ext" }
 ratchet_deflate = { version = "1.0.3", path = "../ratchet_deflate", optional = true }
+ratchet_axum = { version = "1.0.3", path = "../ratchet_axum", optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 log = { workspace = true }
 
@@ -50,3 +54,7 @@ required-features = ["split"]
 
 [[example]]
 name = "server"
+
+[[example]]
+name = "axum"
+required-features = ["with_axum"]

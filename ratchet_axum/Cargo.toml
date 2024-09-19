@@ -1,0 +1,24 @@
+[package]
+name = "ratchet_axum"
+description = "Axum Integration for Ratchet"
+readme = "README.md"
+repository = "https://github.com/swimos/ratchet/"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+categories.workspace = true
+
+
+[dependencies]
+ratchet_core = { version = "1.0.3", path = "../ratchet_core" }
+ratchet_ext = { version = "1.0.3", path = "../ratchet_ext" }
+hyper = { workspace = true }
+axum-core = { workspace = true }
+eyre = { workspace = true}
+hyper-util = { workspace = true , features = ["tokio"]}
+pin-project = { workspace = true }
+async-trait = { workspace = true }
+base64 = "0.22.1"
+http = "1.1.0"
+sha1 = "0.10.1"
