@@ -1,23 +1,3 @@
-// Port of hyper_tunstenite for fastwebsockets.
-// https://github.com/de-vri-es/hyper-tungstenite-rs
-//
-// Copyright 2021, Maarten de Vries maarten@de-vri.es
-// BSD 2-Clause "Simplified" License
-//
-// Copyright 2023 Divy Srivastava <dj.srivastava23@gmail.com>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 //todo missing docs
 
 #![deny(
@@ -40,7 +20,6 @@ use axum_core::body::Body;
 use base64;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use eyre::Report;
 use http::HeaderMap;
 use hyper::Response;
 use hyper_util::rt::TokioIo;
@@ -48,26 +27,33 @@ use pin_project::pin_project;
 use sha1::Digest;
 use sha1::Sha1;
 
-type Error = Report;
+const HEADER_CONNECTION: &str = "upgrade";
+const HEADER_UPGRADE: &str = "websocket";
+const WEBSOCKET_VERSION: &[u8] = b"13";
+
+type Error = hyper::Error;
 
 #[derive(Debug)]
-pub struct IncomingUpgrade {
+pub struct WebSocketUpgrade {
     key: String,
     headers: HeaderMap,
     on_upgrade: hyper::upgrade::OnUpgrade,
     pub permessage_deflate: bool,
 }
 
-impl IncomingUpgrade {
+impl WebSocketUpgrade {
     pub fn upgrade(self) -> Result<(Response<Body>, UpgradeFut), Error> {
         let mut builder = Response::builder()
             .status(hyper::StatusCode::SWITCHING_PROTOCOLS)
-            .header(hyper::header::CONNECTION, "upgrade")
-            .header(hyper::header::UPGRADE, "websocket")
-            .header("Sec-WebSocket-Accept", self.key);
+            .header(hyper::header::CONNECTION, HEADER_CONNECTION)
+            .header(hyper::header::UPGRADE, HEADER_UPGRADE)
+            .header(hyper::header::SEC_WEBSOCKET_ACCEPT, self.key);
 
         if self.permessage_deflate {
-            builder = builder.header("Sec-WebSocket-Extensions", "permessage-deflate");
+            builder = builder.header(
+                hyper::header::SEC_WEBSOCKET_EXTENSIONS,
+                "permessage-deflate",
+            );
         }
 
         let response = builder
@@ -81,10 +67,20 @@ impl IncomingUpgrade {
 
         Ok((response, stream))
     }
+
+    // pub fn upgrade_2<E, F, Fut>(self, f: F) -> Response<Body>
+    // where
+    //     F: FnOnce(UpgradedServer<TokioIo<hyper::upgrade::Upgraded>, E>) -> Fut,
+    //     Fut: Future<Output = ()>,
+    //     E: Extension,
+    // {
+    //
+    //
+    // }
 }
 
 #[async_trait::async_trait]
-impl<S> axum_core::extract::FromRequestParts<S> for IncomingUpgrade
+impl<S> axum_core::extract::FromRequestParts<S> for WebSocketUpgrade
 where
     S: Sync,
 {
@@ -96,20 +92,21 @@ where
     ) -> Result<Self, Self::Rejection> {
         let key = parts
             .headers
-            .get("Sec-WebSocket-Key")
+            .get(http::header::SEC_WEBSOCKET_KEY)
             .ok_or(hyper::StatusCode::BAD_REQUEST)?;
+
         if parts
             .headers
-            .get("Sec-WebSocket-Version")
+            .get(http::header::SEC_WEBSOCKET_VERSION)
             .map(|v| v.as_bytes())
-            != Some(b"13".as_slice())
+            != Some(WEBSOCKET_VERSION)
         {
             return Err(hyper::StatusCode::BAD_REQUEST);
         }
 
         let permessage_deflate = parts
             .headers
-            .get("Sec-WebSocket-Extensions")
+            .get(http::header::SEC_WEBSOCKET_EXTENSIONS)
             .map(|val| {
                 val.to_str()
                     .unwrap_or_default()
@@ -122,6 +119,7 @@ where
             .extensions
             .remove::<hyper::upgrade::OnUpgrade>()
             .ok_or(hyper::StatusCode::BAD_REQUEST)?;
+
         Ok(Self {
             on_upgrade,
             key: sec_websocket_protocol(key.as_bytes()),

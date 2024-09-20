@@ -1,7 +1,7 @@
 use axum::{response::IntoResponse, routing::get, Router};
 use bytes::BytesMut;
-use ratchet_axum::{IncomingUpgrade, UpgradeFut};
-use ratchet_core::{Message, NegotiatedExtension, NoExt, PayloadType, Role, WebSocketConfig};
+use ratchet_axum::{UpgradeFut, WebSocketUpgrade};
+use ratchet_rs::{Message, NegotiatedExtension, NoExt, PayloadType, Role, WebSocketConfig};
 
 #[tokio::main]
 async fn main() {
@@ -33,7 +33,7 @@ async fn handle_client(fut: UpgradeFut) {
     }
 }
 
-async fn ws_handler(incoming_upgrade: IncomingUpgrade) -> impl IntoResponse {
+async fn ws_handler(incoming_upgrade: WebSocketUpgrade) -> impl IntoResponse {
     let (response, fut) = incoming_upgrade.upgrade().unwrap();
     tokio::task::spawn(async move { handle_client(fut).await });
     response
