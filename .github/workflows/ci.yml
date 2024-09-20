@@ -94,7 +94,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.65.0
+          toolchain: 1.70.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --bin client --release
 
@@ -106,7 +106,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.65.0
+          toolchain: 1.70.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --bin server --release
 
@@ -118,7 +118,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.65.0
+          toolchain: 1.70.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --bin split_client --release
 
@@ -130,6 +130,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.65.0
+          toolchain: 1.70.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --bin split_server --release
