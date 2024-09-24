@@ -233,7 +233,11 @@ async fn bad_status_code() {
         .body(())
         .unwrap();
 
-    expect_server_error(response, HttpError::Status(StatusCode::IM_A_TEAPOT)).await;
+    expect_server_error(
+        response,
+        HttpError::Status(Some(StatusCode::IM_A_TEAPOT.as_u16())),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -479,11 +483,11 @@ impl From<ExtHandshakeErr> for Error {
 
 struct MockExtensionProxy<R>(&'static [(HeaderName, &'static str)], R)
 where
-    R: for<'h> Fn(&'h [Header]) -> Result<Option<MockExtension>, ExtHandshakeErr>;
+    R: for<'h> Fn(&'h HeaderMap) -> Result<Option<MockExtension>, ExtHandshakeErr>;
 
 impl<R> ExtensionProvider for MockExtensionProxy<R>
 where
-    R: for<'h> Fn(&'h [Header]) -> Result<Option<MockExtension>, ExtHandshakeErr>,
+    R: for<'h> Fn(&'h HeaderMap) -> Result<Option<MockExtension>, ExtHandshakeErr>,
 {
     type Extension = MockExtension;
     type Error = ExtHandshakeErr;
@@ -494,13 +498,16 @@ where
         }
     }
 
-    fn negotiate_client(&self, headers: &[Header]) -> Result<Option<Self::Extension>, Self::Error> {
-        (self.1)(headers)
+    fn negotiate_client(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<Self::Extension>, Self::Error> {
+        self.1(headers)
     }
 
     fn negotiate_server(
         &self,
-        _headers: &[Header],
+        _headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, ExtHandshakeErr> {
         panic!("Unexpected server-side extension negotiation")
     }
@@ -629,13 +636,13 @@ async fn negotiates_extension() {
     const HEADERS: &[(HeaderName, &str)] = &[(header::SEC_WEBSOCKET_EXTENSIONS, EXT)];
 
     let extension_proxy = MockExtensionProxy(HEADERS, |headers| {
-        let ext = headers.iter().find(|h| {
-            h.name
+        let ext = headers.iter().find(|(name, _value)| {
+            name.as_str()
                 .eq_ignore_ascii_case(header::SEC_WEBSOCKET_EXTENSIONS.as_str())
         });
         match ext {
-            Some(header) => {
-                let value = String::from_utf8(header.value.to_vec())
+            Some((_name, value)) => {
+                let value = String::from_utf8(value.as_bytes().to_vec())
                     .expect("Server returned invalid UTF-8");
                 if value == EXT {
                     Ok(Some(MockExtension(true)))

@@ -24,10 +24,9 @@ use crate::errors::Error;
 use crate::errors::{ErrorKind, HttpError};
 use crate::handshake::io::BufferedIo;
 use crate::{InvalidHeader, Request};
-use bytes::Bytes;
 use http::header::HeaderName;
-use http::Uri;
-use http::{HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, Method, Version};
+use http::{Response, StatusCode, Uri};
 use std::str::FromStr;
 use tokio::io::AsyncRead;
 use tokio_util::codec::Decoder;
@@ -76,9 +75,9 @@ where
     }
 }
 
-pub enum ParseResult<O> {
+pub enum ParseResult<R, O> {
     Complete(O, usize),
-    Partial,
+    Partial(R),
 }
 
 /// A trait for creating a request from a type.
@@ -136,12 +135,12 @@ impl TryIntoRequest for Request {
 }
 
 fn validate_header_value(
-    headers: &[httparse::Header],
+    headers: &HeaderMap,
     name: HeaderName,
     expected: &str,
 ) -> Result<(), Error> {
     validate_header(headers, name, |name, actual| {
-        if actual.eq_ignore_ascii_case(expected.as_bytes()) {
+        if actual.as_bytes().eq_ignore_ascii_case(expected.as_bytes()) {
             Ok(())
         } else {
             Err(Error::with_cause(
@@ -152,15 +151,12 @@ fn validate_header_value(
     })
 }
 
-fn validate_header<F>(headers: &[httparse::Header], name: HeaderName, f: F) -> Result<(), Error>
+fn validate_header<F>(headers: &HeaderMap, name: HeaderName, f: F) -> Result<(), Error>
 where
-    F: Fn(HeaderName, &[u8]) -> Result<(), Error>,
+    F: Fn(HeaderName, &HeaderValue) -> Result<(), Error>,
 {
-    match headers
-        .iter()
-        .find(|h| h.name.eq_ignore_ascii_case(name.as_str()))
-    {
-        Some(header) => f(name, header.value),
+    match headers.get(&name) {
+        Some(value) => f(name, value),
         None => Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::MissingHeader(name),
@@ -168,13 +164,10 @@ where
     }
 }
 
-fn validate_header_any(
-    headers: &[httparse::Header],
-    name: HeaderName,
-    expected: &str,
-) -> Result<(), Error> {
+fn validate_header_any(headers: &HeaderMap, name: HeaderName, expected: &str) -> Result<(), Error> {
     validate_header(headers, name, |name, actual| {
         if actual
+            .as_bytes()
             .split(|c| c == &b' ' || c == &b',')
             .any(|v| v.eq_ignore_ascii_case(expected.as_bytes()))
         {
@@ -186,19 +179,6 @@ fn validate_header_any(
             ))
         }
     })
-}
-
-fn get_header(headers: &[httparse::Header], name: HeaderName) -> Result<Bytes, Error> {
-    match headers
-        .iter()
-        .find(|h| h.name.eq_ignore_ascii_case(name.as_str()))
-    {
-        Some(header) => Ok(Bytes::from(header.value.to_vec())),
-        None => Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::MissingHeader(name),
-        )),
-    }
 }
 
 /// Local replacement for TryInto that can be implemented for httparse::Header and httparse::Request
@@ -245,11 +225,57 @@ impl<'l, 'h, 'buf: 'h> TryMap<Request> for &'l httparse::Request<'h, 'buf> {
                 )))
             }
         };
+        let method = match self.method {
+            Some(m) => {
+                Method::from_str(m).map_err(|_| HttpError::HttpMethod(Some(m.to_string())))?
+            }
+            None => return Err(HttpError::HttpMethod(None)),
+        };
+        let version = match self.version {
+            Some(v) => match v {
+                0 => Version::HTTP_10,
+                1 => Version::HTTP_11,
+                n => return Err(HttpError::HttpVersion(Some(n))),
+            },
+            None => return Err(HttpError::HttpVersion(None)),
+        };
         let headers = &self.headers;
 
         *request.headers_mut() = headers.try_map()?;
         *request.uri_mut() = path;
+        *request.version_mut() = version;
+        *request.method_mut() = method;
 
         Ok(request)
+    }
+}
+
+impl<'l, 'h, 'buf: 'h> TryMap<Response<()>> for &'l httparse::Response<'h, 'buf> {
+    type Error = HttpError;
+
+    fn try_map(self) -> Result<Response<()>, Self::Error> {
+        let mut response = Response::new(());
+        let code = match self.code {
+            Some(c) => match StatusCode::from_u16(c) {
+                Ok(status) => status,
+                Err(_) => return Err(HttpError::Status(Some(c))),
+            },
+            None => return Err(HttpError::Status(None)),
+        };
+        let version = match self.version {
+            Some(v) => match v {
+                0 => Version::HTTP_10,
+                1 => Version::HTTP_11,
+                n => return Err(HttpError::HttpVersion(Some(n))),
+            },
+            None => return Err(HttpError::HttpVersion(None)),
+        };
+        let headers = &self.headers;
+
+        *response.headers_mut() = headers.try_map()?;
+        *response.status_mut() = code;
+        *response.version_mut() = version;
+
+        Ok(response)
     }
 }

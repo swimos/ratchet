@@ -65,7 +65,8 @@ pub trait ExtensionProvider {
     ///
     /// Returning `Err` from this will *fail* the connection with the reason being the error's
     /// `to_string()` value.
-    fn negotiate_client(&self, headers: &[Header]) -> Result<Option<Self::Extension>, Self::Error>;
+    fn negotiate_client(&self, headers: &HeaderMap)
+        -> Result<Option<Self::Extension>, Self::Error>;
 
     /// Negotiate the headers that a client has sent.
     ///
@@ -80,7 +81,7 @@ pub trait ExtensionProvider {
     /// `to_string()` value.
     fn negotiate_server(
         &self,
-        headers: &[Header],
+        headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error>;
 }
 
@@ -95,13 +96,16 @@ where
         E::apply_headers(self, headers)
     }
 
-    fn negotiate_client(&self, headers: &[Header]) -> Result<Option<Self::Extension>, Self::Error> {
+    fn negotiate_client(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<Self::Extension>, Self::Error> {
         E::negotiate_client(self, headers)
     }
 
     fn negotiate_server(
         &self,
-        headers: &[Header],
+        headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error> {
         E::negotiate_server(self, headers)
     }
@@ -118,13 +122,16 @@ where
         E::apply_headers(self, headers)
     }
 
-    fn negotiate_client(&self, headers: &[Header]) -> Result<Option<Self::Extension>, Self::Error> {
+    fn negotiate_client(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<Self::Extension>, Self::Error> {
         E::negotiate_client(self, headers)
     }
 
     fn negotiate_server(
         &self,
-        headers: &[Header],
+        headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error> {
         E::negotiate_server(self, headers)
     }

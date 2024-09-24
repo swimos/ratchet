@@ -16,7 +16,6 @@ use crate::protocol::{CloseCodeParseErr, OpCodeParseErr};
 use http::header::{HeaderName, InvalidHeaderValue};
 use http::status::InvalidStatusCode;
 use http::uri::InvalidUri;
-use http::StatusCode;
 use std::any::Any;
 use std::error::Error as StdError;
 use std::fmt::{Display, Formatter};
@@ -156,8 +155,8 @@ pub enum HttpError {
     #[error("Redirected: `{0}`")]
     Redirected(String),
     /// The peer returned with a status code other than 101.
-    #[error("Status code: `{0}`")]
-    Status(StatusCode),
+    #[error("Status code: `{0:?}`")]
+    Status(Option<u16>),
     /// An invalid HTTP version was received in a request.
     #[error("Invalid HTTP version: `{0:?}`")]
     HttpVersion(Option<u8>),

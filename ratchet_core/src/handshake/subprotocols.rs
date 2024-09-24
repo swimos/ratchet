@@ -16,7 +16,6 @@ use crate::{Error, ErrorKind, HttpError, ProtocolError};
 use fnv::FnvHashSet;
 use http::header::SEC_WEBSOCKET_PROTOCOL;
 use http::{HeaderMap, HeaderValue};
-use httparse::Header;
 use std::borrow::Cow;
 
 /// A subprotocol registry that is used for negotiating a possible subprotocol to use for a
@@ -65,11 +64,10 @@ fn negotiate<'h, I>(
     bias: Bias,
 ) -> Result<Option<String>, ProtocolError>
 where
-    I: Iterator<Item = &'h Header<'h>>,
+    I: Iterator<Item = &'h HeaderValue>,
 {
     for header in headers {
-        let value =
-            String::from_utf8(header.value.to_vec()).map_err(|_| ProtocolError::Encoding)?;
+        let value = std::str::from_utf8(header.as_bytes()).map_err(|_| ProtocolError::Encoding)?;
         let protocols = value
             .split(',')
             .map(|s| s.trim().into())
@@ -103,25 +101,17 @@ where
 
 pub fn negotiate_response(
     registry: &ProtocolRegistry,
-    response: &httparse::Response,
+    header_map: &HeaderMap,
 ) -> Result<Option<String>, ProtocolError> {
-    let it = response
-        .headers
-        .iter()
-        .filter(|h| h.name.eq_ignore_ascii_case(SEC_WEBSOCKET_PROTOCOL.as_str()));
-
+    let it = header_map.get_all(SEC_WEBSOCKET_PROTOCOL).into_iter();
     negotiate(registry, it, Bias::Client)
 }
 
 pub fn negotiate_request(
     registry: &ProtocolRegistry,
-    request: &httparse::Request,
+    header_map: &HeaderMap,
 ) -> Result<Option<String>, ProtocolError> {
-    let it = request
-        .headers
-        .iter()
-        .filter(|h| h.name.eq_ignore_ascii_case(SEC_WEBSOCKET_PROTOCOL.as_str()));
-
+    let it = header_map.get_all(SEC_WEBSOCKET_PROTOCOL).into_iter();
     negotiate(registry, it, Bias::Server)
 }
 

@@ -15,7 +15,6 @@
 use crate::Error;
 use bytes::BytesMut;
 use http::{HeaderMap, HeaderValue};
-use httparse::Header;
 use ratchet_ext::{
     Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader,
     ReunitableExtension, RsvBits, SplittableExtension,
@@ -61,14 +60,14 @@ impl ExtensionProvider for NoExtProvider {
 
     fn negotiate_client(
         &self,
-        _headers: &[Header],
+        _headers: &HeaderMap,
     ) -> Result<Option<Self::Extension>, Self::Error> {
         Ok(None)
     }
 
     fn negotiate_server(
         &self,
-        _headers: &[Header],
+        _headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error> {
         Ok(None)
     }

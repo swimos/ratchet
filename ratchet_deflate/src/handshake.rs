@@ -18,7 +18,6 @@ use bytes::BytesMut;
 use flate2::Compression;
 use http::header::SEC_WEBSOCKET_EXTENSIONS;
 use http::{HeaderMap, HeaderValue};
-use ratchet_ext::Header;
 use std::fmt::Write;
 use std::str::Utf8Error;
 
@@ -152,7 +151,7 @@ pub fn apply_headers(header_map: &mut HeaderMap, config: &DeflateConfig) {
 }
 
 pub fn negotiate_client(
-    headers: &[Header],
+    headers: &HeaderMap,
     config: &DeflateConfig,
 ) -> Result<Option<Deflate>, DeflateExtensionError> {
     match on_response(headers, config) {
@@ -163,7 +162,7 @@ pub fn negotiate_client(
 }
 
 pub fn negotiate_server(
-    headers: &[Header],
+    headers: &HeaderMap,
     config: &DeflateConfig,
 ) -> Result<Option<(Deflate, HeaderValue)>, DeflateExtensionError> {
     match on_request(headers, config) {
@@ -177,17 +176,17 @@ pub fn negotiate_server(
 }
 
 pub fn on_request(
-    headers: &[Header],
+    headers: &HeaderMap,
     config: &DeflateConfig,
 ) -> Result<(InitialisedDeflateConfig, HeaderValue), NegotiationErr> {
-    let header_iter = headers.iter().filter(|h| {
-        h.name
+    let header_iter = headers.iter().filter(|(name, _value)| {
+        name.as_str()
             .eq_ignore_ascii_case(SEC_WEBSOCKET_EXTENSIONS.as_str())
     });
 
-    for header in header_iter {
+    for (_, value) in header_iter {
         let header_value =
-            std::str::from_utf8(header.value).map_err(DeflateExtensionError::from)?;
+            std::str::from_utf8(value.as_bytes()).map_err(DeflateExtensionError::from)?;
 
         for part in header_value.split(',') {
             match validate_request_header(part, config) {
@@ -319,7 +318,7 @@ impl From<Utf8Error> for NegotiationErr {
 }
 
 pub fn on_response(
-    headers: &[Header],
+    headers: &HeaderMap,
     config: &DeflateConfig,
 ) -> Result<InitialisedDeflateConfig, NegotiationErr> {
     let mut seen_extension_name = false;
@@ -335,13 +334,13 @@ pub fn on_response(
     let mut client_max_window_bits = config.client_max_window_bits;
     let accept_no_context_takeover = config.accept_no_context_takeover;
 
-    let header_iter = headers.iter().filter(|h| {
-        h.name
+    let header_iter = headers.iter().filter(|(name, _value)| {
+        name.as_str()
             .eq_ignore_ascii_case(SEC_WEBSOCKET_EXTENSIONS.as_str())
     });
 
-    for header in header_iter {
-        let header_value = std::str::from_utf8(header.value)?;
+    for (_name, value) in header_iter {
+        let header_value = std::str::from_utf8(value.as_bytes())?;
         let mut param_iter = header_value.split(';');
 
         if let Some(param) = param_iter.next() {
