@@ -17,8 +17,8 @@ use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
 use crate::split::{FramedIo, Receiver, Sender, WriteHalf};
 use crate::ws::extension_encode;
 use crate::{
-    CloseCause, CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, NoExtDecoder,
-    NoExtEncoder, Role, WebSocket, WebSocketConfig, WebSocketStream,
+    CloseCause, CloseCode, CloseReason, Error, Message, NoExt, NoExtDecoder, NoExtEncoder, Role,
+    WebSocket, WebSocketConfig, WebSocketStream,
 };
 use bytes::{Bytes, BytesMut};
 use ratchet_ext::{ExtensionDecoder, ExtensionEncoder};
@@ -105,24 +105,14 @@ fn fixture() -> (Channel, Channel) {
     let (server, client) = duplex(512);
     let config = WebSocketConfig::default();
 
-    let server = WebSocket::from_upgraded(
-        config,
-        server,
-        NegotiatedExtension::from(NoExt),
-        BytesMut::new(),
-        Role::Server,
-    )
-    .split()
-    .unwrap();
-    let client = WebSocket::from_upgraded(
-        config,
-        client,
-        NegotiatedExtension::from(NoExt),
-        BytesMut::new(),
-        Role::Client,
-    )
-    .split()
-    .unwrap();
+    let server =
+        WebSocket::from_upgraded(config, server, Some(NoExt), BytesMut::new(), Role::Server)
+            .split()
+            .unwrap();
+    let client =
+        WebSocket::from_upgraded(config, client, Some(NoExt), BytesMut::new(), Role::Client)
+            .split()
+            .unwrap();
 
     (client, server)
 }

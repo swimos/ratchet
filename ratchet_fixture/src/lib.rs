@@ -14,25 +14,28 @@
 
 pub mod duplex {
     use bytes::BytesMut;
-    use ratchet::{Extension, NegotiatedExtension, Role, WebSocketConfig};
+    use ratchet::{Extension, Role, WebSocketConfig};
     use tokio::io::DuplexStream;
 
     pub type MockWebSocket<E> = ratchet::WebSocket<DuplexStream, E>;
 
-    pub fn make_websocket<E>(stream: DuplexStream, role: Role, ext: E) -> MockWebSocket<E>
+    pub fn make_websocket<E>(stream: DuplexStream, role: Role, ext: Option<E>) -> MockWebSocket<E>
     where
         E: Extension,
     {
         ratchet::WebSocket::from_upgraded(
             WebSocketConfig::default(),
             stream,
-            NegotiatedExtension::from(Some(ext)),
+            ext,
             BytesMut::new(),
             role,
         )
     }
 
-    pub fn websocket_pair<L, R>(left_ext: L, right_ext: R) -> (MockWebSocket<L>, MockWebSocket<R>)
+    pub fn websocket_pair<L, R>(
+        left_ext: Option<L>,
+        right_ext: Option<R>,
+    ) -> (MockWebSocket<L>, MockWebSocket<R>)
     where
         L: Extension,
         R: Extension,
@@ -44,7 +47,7 @@ pub mod duplex {
         )
     }
 
-    pub async fn websocket_for<E>(role: Role, ext: E) -> (MockWebSocket<E>, DuplexStream)
+    pub async fn websocket_for<E>(role: Role, ext: Option<E>) -> (MockWebSocket<E>, DuplexStream)
     where
         E: Extension,
     {
@@ -53,7 +56,7 @@ pub mod duplex {
             ratchet::WebSocket::from_upgraded(
                 WebSocketConfig::default(),
                 tx,
-                NegotiatedExtension::from(Some(ext)),
+                ext,
                 BytesMut::new(),
                 role,
             ),

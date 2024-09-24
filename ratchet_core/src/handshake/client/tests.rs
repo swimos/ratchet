@@ -661,7 +661,7 @@ async fn negotiates_extension() {
             );
         },
         |result| match result {
-            Ok(handshake_result) => assert!(handshake_result.extension.take().unwrap().0),
+            Ok(mut handshake_result) => assert!(handshake_result.extension.take().unwrap().0),
             Err(e) => {
                 panic!("Expected a valid upgrade: {:?}", e)
             }
@@ -679,7 +679,7 @@ async fn negotiates_no_extension() {
         extension_proxy,
         |_| {},
         |result| match result {
-            Ok(handshake_result) => assert!(!handshake_result.extension.take().unwrap().0),
+            Ok(mut handshake_result) => assert!(!handshake_result.extension.take().unwrap().0),
             Err(e) => {
                 panic!("Expected a valid upgrade: {:?}", e)
             }

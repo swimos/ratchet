@@ -267,3 +267,82 @@ pub trait ReunitableExtension: SplittableExtension {
     /// Reunite this encoder and decoder back into a single extension.
     fn reunite(encoder: Self::SplitEncoder, decoder: Self::SplitDecoder) -> Self;
 }
+
+impl<E> Extension for Option<E>
+where
+    E: Extension,
+{
+    fn bits(&self) -> RsvBits {
+        match self {
+            Some(ext) => ext.bits(),
+            None => RsvBits {
+                rsv1: false,
+                rsv2: false,
+                rsv3: false,
+            },
+        }
+    }
+}
+
+impl<E> ExtensionEncoder for Option<E>
+where
+    E: ExtensionEncoder,
+{
+    type Error = E::Error;
+
+    fn encode(
+        &mut self,
+        payload: &mut BytesMut,
+        header: &mut FrameHeader,
+    ) -> Result<(), Self::Error> {
+        match self {
+            Some(e) => e.encode(payload, header),
+            None => Ok(()),
+        }
+    }
+}
+
+impl<E> ExtensionDecoder for Option<E>
+where
+    E: ExtensionDecoder,
+{
+    type Error = E::Error;
+
+    fn decode(
+        &mut self,
+        payload: &mut BytesMut,
+        header: &mut FrameHeader,
+    ) -> Result<(), Self::Error> {
+        match self {
+            Some(e) => e.decode(payload, header),
+            None => Ok(()),
+        }
+    }
+}
+
+impl<E> ReunitableExtension for Option<E>
+where
+    E: ReunitableExtension,
+{
+    fn reunite(encoder: Self::SplitEncoder, decoder: Self::SplitDecoder) -> Self {
+        Option::zip(encoder, decoder).map(|(encoder, decoder)| E::reunite(encoder, decoder))
+    }
+}
+
+impl<E> SplittableExtension for Option<E>
+where
+    E: SplittableExtension,
+{
+    type SplitEncoder = Option<E::SplitEncoder>;
+    type SplitDecoder = Option<E::SplitDecoder>;
+
+    fn split(self) -> (Self::SplitEncoder, Self::SplitDecoder) {
+        match self {
+            Some(ext) => {
+                let (encoder, decoder) = ext.split();
+                (Some(encoder), (Some(decoder)))
+            }
+            None => (None, None),
+        }
+    }
+}
