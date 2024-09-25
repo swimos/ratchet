@@ -67,7 +67,7 @@ impl<S, E> UpgradedServer<S, E> {
 /// Returns either a `WebSocketUpgrader` that may be used to either accept or reject the peer or an
 /// error if the peer's request is malformatted or if an IO error occurs. If the peer is accepted,
 /// then `config` will be used for building the `WebSocket`.
-pub async fn accept<S, E>(
+pub async fn accept<S>(
     stream: S,
     config: WebSocketConfig,
 ) -> Result<WebSocketUpgrader<S, NoExt>, Error>

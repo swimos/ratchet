@@ -23,7 +23,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 url = "2.1.1"
 http = "1.1.0"
-tokio = "=1.38.1"
+tokio = "1.22"
 tokio-util = "0.7.4"
 tokio-stream = "0.1.11"
 futures = "0.3.4"
