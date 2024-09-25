@@ -16,107 +16,113 @@ use crate::{Error, ErrorKind, HttpError, ProtocolError};
 use fnv::FnvHashSet;
 use http::header::SEC_WEBSOCKET_PROTOCOL;
 use http::{HeaderMap, HeaderValue};
-use std::borrow::Cow;
+use std::sync::Arc;
 
 /// A subprotocol registry that is used for negotiating a possible subprotocol to use for a
 /// connection.
 #[derive(Default, Debug, Clone)]
-pub struct ProtocolRegistry {
-    registrants: FnvHashSet<Cow<'static, str>>,
+pub struct SubprotocolRegistry {
+    inner: Arc<Inner>,
+}
+
+#[derive(Debug, Default)]
+struct Inner {
+    registrants: FnvHashSet<String>,
     header: Option<HeaderValue>,
 }
 
-impl ProtocolRegistry {
-    /// Construct a new protocol registry that will allow the provided items.
-    pub fn new<I>(i: I) -> Result<ProtocolRegistry, Error>
+impl SubprotocolRegistry {
+    /// Construct a new protocol registry that will allow the provided subprotocols. The priority
+    /// of the subprotocols is specified by the order that the iterator yields items.
+    pub fn new<I>(i: I) -> Result<SubprotocolRegistry, Error>
     where
         I: IntoIterator,
-        I::Item: Into<Cow<'static, str>>,
+        I::Item: Into<String>,
     {
-        let registrants = i
-            .into_iter()
-            .map(Into::into)
-            .collect::<FnvHashSet<Cow<'static, str>>>();
+        let registrants = i.into_iter().map(Into::into).collect::<FnvHashSet<_>>();
         let header_str = registrants
             .clone()
             .into_iter()
             .collect::<Vec<_>>()
             .join(", ");
         let header = HeaderValue::from_str(&header_str).map_err(|_| {
-            crate::Error::with_cause(ErrorKind::Http, HttpError::MalformattedHeader(header_str))
+            Error::with_cause(ErrorKind::Http, HttpError::MalformattedHeader(header_str))
         })?;
 
-        Ok(ProtocolRegistry {
-            registrants,
-            header: Some(header),
+        Ok(SubprotocolRegistry {
+            inner: Arc::new(Inner {
+                registrants,
+                header: Some(header),
+            }),
         })
     }
-}
 
-enum Bias {
-    Client,
-    Server,
-}
+    /// Attempts to negotiate a subprotocol offered by a client.
+    ///
+    /// # Returns
+    /// The subprotocol that was negotiated if one was offered. Or an error if the client send a
+    /// malformed header.
+    pub fn negotiate_client(
+        &self,
+        header_map: &HeaderMap,
+    ) -> Result<Option<String>, ProtocolError> {
+        let SubprotocolRegistry { inner } = self;
 
-fn negotiate<'h, I>(
-    registry: &ProtocolRegistry,
-    headers: I,
-    bias: Bias,
-) -> Result<Option<String>, ProtocolError>
-where
-    I: Iterator<Item = &'h HeaderValue>,
-{
-    for header in headers {
-        let value = std::str::from_utf8(header.as_bytes()).map_err(|_| ProtocolError::Encoding)?;
-        let protocols = value
-            .split(',')
-            .map(|s| s.trim().into())
-            .collect::<FnvHashSet<_>>();
+        for header in header_map.get_all(SEC_WEBSOCKET_PROTOCOL) {
+            let header_str = header.to_str().map_err(|_| ProtocolError::Encoding)?;
 
-        let selected = match bias {
-            Bias::Client => {
-                if !registry.registrants.is_superset(&protocols) {
-                    return Err(ProtocolError::UnknownProtocol);
+            for protocol in header_str.split(',') {
+                if let Some(supported_protocol) = inner.registrants.get(protocol.trim()) {
+                    return Ok(Some(supported_protocol.clone()));
                 }
-                protocols
-                    .intersection(&registry.registrants)
-                    .next()
-                    .map(|s| s.to_string())
             }
-            Bias::Server => registry
-                .registrants
-                .intersection(&protocols)
-                .next()
-                .map(|s| s.to_string()),
-        };
+        }
 
-        match selected {
-            Some(selected) => return Ok(Some(selected)),
-            None => continue,
+        Ok(None)
+    }
+
+    /// Validate a server's response for SEC_WEBSOCKET_PROTOCOL. A server may send at most one
+    /// sec-websocket-protocol header, and it must contain a subprotocol that was offered by the
+    /// client.
+    ///
+    /// # Returns
+    /// The subprotocol that was accepted by the server if one was offered. Or an error if the
+    /// server responded with a malformed header.
+    pub fn validate_accepted_subprotocol(
+        &self,
+        header_map: &HeaderMap,
+    ) -> Result<Option<String>, ProtocolError> {
+        let SubprotocolRegistry { inner } = self;
+
+        let protocols: Vec<_> = header_map.get_all(SEC_WEBSOCKET_PROTOCOL).iter().collect();
+
+        if protocols.len() > 1 {
+            return Err(ProtocolError::InvalidSubprotocolHeader(
+                "Server returned too many subprotocols".to_string(),
+            ));
+        }
+
+        if protocols.is_empty() {
+            return Ok(None);
+        }
+
+        let server_protocol = protocols[0].to_str().map_err(|_| ProtocolError::Encoding)?;
+
+        if inner.registrants.contains(server_protocol) {
+            Ok(Some(server_protocol.to_string()))
+        } else {
+            Err(ProtocolError::InvalidSubprotocolHeader(
+                server_protocol.to_string(),
+            ))
         }
     }
 
-    Ok(None)
-}
+    /// Applies a sec-websocket-protocol header to `target` if one has been registered.
+    pub fn apply_to(&self, target: &mut HeaderMap) {
+        let SubprotocolRegistry { inner } = self;
 
-pub fn negotiate_response(
-    registry: &ProtocolRegistry,
-    header_map: &HeaderMap,
-) -> Result<Option<String>, ProtocolError> {
-    let it = header_map.get_all(SEC_WEBSOCKET_PROTOCOL).into_iter();
-    negotiate(registry, it, Bias::Client)
-}
-
-pub fn negotiate_request(
-    registry: &ProtocolRegistry,
-    header_map: &HeaderMap,
-) -> Result<Option<String>, ProtocolError> {
-    let it = header_map.get_all(SEC_WEBSOCKET_PROTOCOL).into_iter();
-    negotiate(registry, it, Bias::Server)
-}
-
-pub fn apply_to(registry: &ProtocolRegistry, target: &mut HeaderMap) {
-    if let Some(header) = &registry.header {
-        target.insert(SEC_WEBSOCKET_PROTOCOL, header.clone());
+        if let Some(header) = &inner.header {
+            target.insert(SEC_WEBSOCKET_PROTOCOL, header.clone());
+        }
     }
 }

@@ -21,8 +21,8 @@ use crate::errors::{Error, ErrorKind, HttpError};
 use crate::handshake::client::encoding::{build_request, encode_request};
 use crate::handshake::io::BufferedIo;
 use crate::handshake::{
-    negotiate_response, validate_header, validate_header_value, ParseResult, ProtocolRegistry,
-    StreamingParser, TryMap, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
+    validate_header, validate_header_value, ParseResult, StreamingParser, SubprotocolRegistry,
+    TryMap, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
 };
 use crate::{
     NoExt, NoExtProvider, Role, TryIntoRequest, WebSocket, WebSocketConfig, WebSocketStream,
@@ -80,7 +80,7 @@ where
         &mut stream,
         request.try_into_request()?,
         NoExtProvider,
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
         &mut read_buffer,
     )
     .await?;
@@ -98,7 +98,7 @@ pub async fn subscribe_with<S, E, R>(
     mut stream: S,
     request: R,
     extension: E,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
 ) -> Result<UpgradedClient<S, E::Extension>, Error>
 where
     S: WebSocketStream,
@@ -128,7 +128,7 @@ async fn exec_client_handshake<S, E>(
     stream: &mut S,
     request: Request<()>,
     extension: E,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
     buf: &mut BytesMut,
 ) -> Result<HandshakeResult<E::Extension>, Error>
 where
@@ -163,14 +163,14 @@ where
 struct ClientHandshake<'s, S, E> {
     buffered: BufferedIo<'s, S>,
     nonce: Nonce,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
     extension: &'s E,
 }
 
 pub struct StreamingResponseParser<'b, E> {
     nonce: &'b Nonce,
     extension: &'b E,
-    subprotocols: &'b mut ProtocolRegistry,
+    subprotocols: &'b mut SubprotocolRegistry,
 }
 
 impl<'b, E> Decoder for StreamingResponseParser<'b, E>
@@ -207,7 +207,7 @@ where
 {
     pub fn new(
         socket: &'s mut S,
-        subprotocols: ProtocolRegistry,
+        subprotocols: SubprotocolRegistry,
         extension: &'s E,
         buf: &'s mut BytesMut,
     ) -> ClientHandshake<'s, S, E> {
@@ -316,7 +316,7 @@ fn try_parse_response<'h, 'b, E>(
     mut response: Response<'h, 'b>,
     expected_nonce: &Nonce,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
+    subprotocols: &mut SubprotocolRegistry,
 ) -> Result<ParseResult<Response<'h, 'b>, HandshakeResult<E::Extension>>, Error>
 where
     'h: 'b,
@@ -336,14 +336,14 @@ fn parse_response<E>(
     response: http::Response<()>,
     expected_nonce: &Nonce,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
+    subprotocols: &SubprotocolRegistry,
 ) -> Result<HandshakeResult<E::Extension>, Error>
 where
     E: ExtensionProvider,
 {
     if response.version() < Version::HTTP_11 {
         // rfc6455 § 4.2.1.1: must be HTTP/1.1 or higher
-        // this will implicitly be 0 as httparse only parses HTTP/1.x and 1.1 is 0.
+        // this will implicitly be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
         return Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::HttpVersion(Some(0)),
@@ -399,7 +399,7 @@ where
     )?;
 
     Ok(HandshakeResult {
-        subprotocol: negotiate_response(subprotocols, response.headers())?,
+        subprotocol: subprotocols.validate_accepted_subprotocol(response.headers())?,
         extension: extension
             .negotiate_client(response.headers())
             .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?,

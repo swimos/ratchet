@@ -15,7 +15,7 @@
 use bytes::BytesMut;
 use log::trace;
 use ratchet_rs::deflate::DeflateExtProvider;
-use ratchet_rs::{Error, Message, PayloadType, ProtocolRegistry, WebSocketConfig};
+use ratchet_rs::{Error, Message, PayloadType, SubprotocolRegistry, WebSocketConfig};
 use tokio::io::{BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -34,7 +34,7 @@ async fn run(stream: TcpStream) -> Result<(), Error> {
         BufReader::new(BufWriter::new(stream)),
         WebSocketConfig::default(),
         DeflateExtProvider::default(),
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
     )
     .await
     .unwrap()

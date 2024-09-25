@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use crate::handshake::io::BufferedIo;
-use crate::handshake::server::HandshakeResult;
-use crate::handshake::{negotiate_request, TryMap};
+use crate::handshake::server::UpgradeRequest;
+use crate::handshake::TryMap;
 use crate::handshake::{
     validate_header, validate_header_any, validate_header_value, ParseResult, METHOD_GET,
     UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
 };
-use crate::{Error, ErrorKind, HttpError, ProtocolRegistry};
+use crate::{Error, ErrorKind, HttpError, SubprotocolRegistry};
 use bytes::{BufMut, Bytes, BytesMut};
 use http::header::SEC_WEBSOCKET_KEY;
 use http::{HeaderMap, Method, StatusCode, Version};
@@ -38,7 +38,7 @@ const HTTP_VERSION_INT: u8 = 1;
 const HTTP_VERSION: Version = Version::HTTP_11;
 
 pub struct RequestParser<E> {
-    pub subprotocols: ProtocolRegistry,
+    pub subprotocols: SubprotocolRegistry,
     pub extension: E,
 }
 
@@ -46,7 +46,7 @@ impl<E> Decoder for RequestParser<E>
 where
     E: ExtensionProvider,
 {
-    type Item = (HandshakeResult<E::Extension>, usize);
+    type Item = (UpgradeRequest<E::Extension>, usize);
     type Error = Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -129,8 +129,8 @@ pub fn try_parse_request<'h, 'b, E>(
     buffer: &'b [u8],
     mut request: httparse::Request<'h, 'b>,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
-) -> Result<ParseResult<httparse::Request<'h, 'b>, HandshakeResult<E::Extension>>, Error>
+    subprotocols: &mut SubprotocolRegistry,
+) -> Result<ParseResult<httparse::Request<'h, 'b>, UpgradeRequest<E::Extension>>, Error>
 where
     E: ExtensionProvider,
 {
@@ -169,16 +169,43 @@ pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn parse_request<E>(
-    request: http::Request<()>,
+/// Parses an HTTP request to extract WebSocket upgrade information.
+///
+/// This function validates and processes an incoming HTTP request to ensure it meets the
+/// requirements for a WebSocket upgrade. It checks the HTTP version, method, and necessary headers
+/// to determine if the request can be successfully upgraded to a WebSocket connection. It also
+/// negotiates the subprotocols and extensions specified in the request.
+///
+/// # Arguments
+/// - `request`: An `http::Request<B>` representing the incoming HTTP request from the client, which
+/// is expected to contain WebSocket-specific headers. While it is discouraged for GET requests to
+/// have a body it is not technically incorrect and the use of this function is lowering the
+/// guardrails to allow for Ratchet to be more easily integrated into other libraries. It is the
+/// implementors responsibility to perform any validation on the body.
+/// - `extension`: An instance of a type that implements the `ExtensionProvider`
+/// trait. This object is responsible for negotiating any server-supported
+/// extensions requested by the client.
+/// - `subprotocols`: A `SubprotocolRegistry`, which manages the supported subprotocols and attempts
+/// to negotiate one with the client.
+///
+/// # Returns
+/// This function returns a `Result<UpgradeRequest<E::Extension, B>, Error>`, where:
+/// - `Ok(UpgradeRequest)`: Contains the parsed information needed for the WebSocket
+///   handshake, including the WebSocket key, negotiated subprotocol, optional
+///   extensions, and the original HTTP request.
+/// - `Err(Error)`: Contains an error if the request is invalid or cannot be parsed.
+///   This could include issues such as unsupported HTTP versions, invalid methods,
+///   missing required headers, or failed negotiations for subprotocols or extensions.
+pub fn parse_request<E, B>(
+    request: http::Request<B>,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
-) -> Result<HandshakeResult<E::Extension>, Error>
+    subprotocols: &SubprotocolRegistry,
+) -> Result<UpgradeRequest<E::Extension, B>, Error>
 where
     E: ExtensionProvider,
 {
     if request.version() < HTTP_VERSION {
-        // this will implicitly be 0 as httparse only parses HTTP/1.x and 1.1 is 0.
+        // this will implicitly be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
         return Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::HttpVersion(Some(0)),
@@ -209,17 +236,17 @@ where
         .ok_or_else(|| {
             Error::with_cause(ErrorKind::Http, HttpError::MissingHeader(SEC_WEBSOCKET_KEY))
         })?;
-    let subprotocol = negotiate_request(subprotocols, headers)?;
+    let subprotocol = subprotocols.negotiate_client(headers)?;
     let (extension, extension_header) = extension
         .negotiate_server(headers)
         .map(Option::unzip)
         .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?;
 
-    Ok(HandshakeResult {
+    Ok(UpgradeRequest {
         key,
-        request,
         extension,
         subprotocol,
         extension_header,
+        request,
     })
 }

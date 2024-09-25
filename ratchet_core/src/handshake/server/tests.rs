@@ -15,7 +15,7 @@
 use crate::handshake::{UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR};
 use crate::test_fixture::{mock, ReadError};
 use crate::{
-    accept_with, Error, ErrorKind, HttpError, NoExtProvider, ProtocolRegistry, WebSocketConfig,
+    accept_with, Error, ErrorKind, HttpError, NoExtProvider, SubprotocolRegistry, WebSocketConfig,
 };
 use bytes::BytesMut;
 use http::header::HeaderName;
@@ -41,7 +41,7 @@ async fn exec_request(request: Request<()>) -> Result<Response<()>, Error> {
         server,
         WebSocketConfig::default(),
         NoExtProvider,
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
     )
     .await?;
 
@@ -303,7 +303,7 @@ async fn bad_extension() {
         server,
         WebSocketConfig::default(),
         BadExtProvider,
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
     )
     .await;
 

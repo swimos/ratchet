@@ -22,9 +22,7 @@ use ratchet_ext::ExtensionProvider;
 
 use crate::errors::{Error, ErrorKind, HttpError};
 use crate::handshake::client::Nonce;
-use crate::handshake::{
-    apply_to, ProtocolRegistry, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
-};
+use crate::handshake::{SubprotocolRegistry, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR};
 
 use base64::engine::general_purpose::STANDARD;
 
@@ -125,7 +123,7 @@ pub struct ValidatedRequest {
 pub fn build_request<E>(
     request: Request<()>,
     extension: &E,
-    subprotocols: &ProtocolRegistry,
+    subprotocols: &SubprotocolRegistry,
 ) -> Result<ValidatedRequest, Error>
 where
     E: ExtensionProvider,
@@ -197,7 +195,7 @@ where
         ));
     }
 
-    apply_to(subprotocols, &mut headers);
+    subprotocols.apply_to(&mut headers);
 
     let option = headers
         .get(header::SEC_WEBSOCKET_KEY)

@@ -33,7 +33,10 @@ use tokio_util::codec::Decoder;
 use url::Url;
 
 pub use client::{subscribe, subscribe_with, UpgradedClient};
-pub use server::{accept, accept_with, UpgradedServer, WebSocketResponse, WebSocketUpgrader};
+pub use server::{
+    accept, accept_with, build_response, handshake, parse_request, UpgradeRequest, UpgradedServer,
+    WebSocketResponse, WebSocketUpgrader,
+};
 pub use subprotocols::*;
 
 const WEBSOCKET_STR: &str = "websocket";

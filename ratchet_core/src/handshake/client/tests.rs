@@ -15,7 +15,7 @@
 use crate::errors::{Error, HttpError};
 use crate::ext::NoExt;
 use crate::handshake::client::{ClientHandshake, HandshakeResult};
-use crate::handshake::{ProtocolRegistry, ACCEPT_KEY, UPGRADE_STR, WEBSOCKET_STR};
+use crate::handshake::{SubprotocolRegistry, ACCEPT_KEY, UPGRADE_STR, WEBSOCKET_STR};
 use crate::test_fixture::mock;
 use crate::{ErrorKind, NoExtProvider, ProtocolError, TryIntoRequest};
 use base64::engine::{general_purpose::STANDARD, Engine};
@@ -44,7 +44,7 @@ async fn handshake_sends_valid_request() {
     let mut buf = BytesMut::new();
     let mut machine = ClientHandshake::new(
         &mut stream,
-        ProtocolRegistry::new(vec!["warp"]).unwrap(),
+        SubprotocolRegistry::new(vec!["warp"]).unwrap(),
         &NoExtProvider,
         &mut buf,
     );
@@ -84,7 +84,7 @@ async fn handshake_invalid_requests() {
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -157,7 +157,7 @@ async fn expect_server_error(response: Response<()>, expected_error: HttpError) 
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -261,7 +261,7 @@ async fn ok_nonce() {
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -331,7 +331,7 @@ async fn redirection() {
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -391,7 +391,7 @@ where
 
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::new(registry).unwrap(),
+            SubprotocolRegistry::new(registry).unwrap(),
             &NoExtProvider,
             &mut buf,
         );
@@ -458,7 +458,10 @@ async fn invalid_subprotocol() {
         let protocol_error = err
             .downcast_ref::<ProtocolError>()
             .expect("Expected a protocol error");
-        assert_eq!(protocol_error, &ProtocolError::UnknownProtocol);
+        assert_eq!(
+            protocol_error,
+            &ProtocolError::InvalidSubprotocolHeader("warpy".to_string())
+        );
     })
     .await;
 }
@@ -579,7 +582,7 @@ where
     let client_task = async move {
         let mut buf = BytesMut::new();
         let mut machine =
-            ClientHandshake::new(&mut stream, ProtocolRegistry::default(), &ext, &mut buf);
+            ClientHandshake::new(&mut stream, SubprotocolRegistry::default(), &ext, &mut buf);
         machine
             .encode(Request::get(TEST_URL).body(()).unwrap())
             .unwrap();

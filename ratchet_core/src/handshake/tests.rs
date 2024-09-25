@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::handshake::{negotiate_request, ProtocolRegistry};
+use crate::handshake::SubprotocolRegistry;
 use crate::ProtocolError;
 use http::header::SEC_WEBSOCKET_PROTOCOL;
 use http::{HeaderMap, HeaderValue};
@@ -23,10 +23,10 @@ fn selects_protocol_ok() {
         SEC_WEBSOCKET_PROTOCOL,
         HeaderValue::from_static("warp, warps"),
     )]);
-    let registry = ProtocolRegistry::new(vec!["warps", "warp"]).unwrap();
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp"]).unwrap();
 
     assert_eq!(
-        negotiate_request(&registry, &headers),
+        registry.negotiate_client(&headers),
         Ok(Some("warp".to_string()))
     );
 }
@@ -37,10 +37,10 @@ fn multiple_headers() {
         (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warp")),
         (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warps")),
     ]);
-    let registry = ProtocolRegistry::new(vec!["warps", "warp"]).unwrap();
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp"]).unwrap();
 
     assert_eq!(
-        negotiate_request(&registry, &headers),
+        registry.negotiate_client(&headers),
         Ok(Some("warp".to_string()))
     );
 }
@@ -55,10 +55,10 @@ fn mixed_headers() {
         ),
         (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warps4.0")),
     ]);
-    let registry = ProtocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
 
     assert_eq!(
-        negotiate_request(&registry, &headers),
+        registry.negotiate_client(&headers),
         Ok(Some("warps2.0".to_string()))
     );
 }
@@ -68,10 +68,10 @@ fn malformatted() {
     let headers = HeaderMap::from_iter([(SEC_WEBSOCKET_PROTOCOL, unsafe {
         HeaderValue::from_maybe_shared_unchecked([255, 255, 255, 255])
     })]);
-    let registry = ProtocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
 
     assert_eq!(
-        negotiate_request(&registry, &headers),
+        registry.negotiate_client(&headers),
         Err(ProtocolError::Encoding)
     );
 }
@@ -80,7 +80,7 @@ fn malformatted() {
 fn no_match() {
     let headers =
         HeaderMap::from_iter([(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("a,b,c"))]);
-    let registry = ProtocolRegistry::new(vec!["d"]).unwrap();
+    let registry = SubprotocolRegistry::new(vec!["d"]).unwrap();
 
-    assert_eq!(negotiate_request(&registry, &headers), Ok(None));
+    assert_eq!(registry.negotiate_client(&headers), Ok(None));
 }

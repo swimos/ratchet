@@ -268,14 +268,11 @@ pub enum CloseCause {
 }
 
 /// WebSocket protocol errors.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ProtocolError {
     /// Invalid encoding was received.
     #[error("Not valid UTF-8 encoding")]
     Encoding,
-    /// A peer selected a protocol that was not sent.
-    #[error("Received an unknown subprotocol")]
-    UnknownProtocol,
     /// An invalid OpCode was received.
     #[error("Bad OpCode: `{0}`")]
     OpCode(OpCodeParseErr),
@@ -309,6 +306,9 @@ pub enum ProtocolError {
     /// An invalid control frame was received.
     #[error("Received an invalid control frame")]
     InvalidControlFrame,
+    /// Failed to build subprotocol header.
+    #[error("Invalid subprotocol header: `{0}`")]
+    InvalidSubprotocolHeader(String),
 }
 
 impl From<FromUtf8Error> for Error {
