@@ -14,6 +14,7 @@
 
 use crate::errors::{Error, HttpError};
 use crate::ext::NoExt;
+use crate::handshake::client::encoding::build_request;
 use crate::handshake::client::{ClientHandshake, HandshakeResult};
 use crate::handshake::{ProtocolRegistry, ACCEPT_KEY, UPGRADE_STR, WEBSOCKET_STR};
 use crate::test_fixture::mock;
@@ -22,8 +23,11 @@ use base64::engine::{general_purpose::STANDARD, Engine};
 use bytes::BytesMut;
 use futures::future::join;
 use futures::FutureExt;
-use http::header::HeaderName;
-use http::{header, HeaderMap, HeaderValue, Request, Response, StatusCode, Version};
+use http::header::{
+    HeaderName, CONNECTION, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL,
+    SEC_WEBSOCKET_VERSION, UPGRADE,
+};
+use http::{header, HeaderMap, HeaderValue, Method, Request, Response, StatusCode, Version};
 use httparse::{Header, Status};
 use ratchet_ext::{
     Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader,
@@ -36,6 +40,7 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::Notify;
 
 const TEST_URL: &str = "ws://127.0.0.1:9001/test";
+const ERR: &str = "Expected an error";
 
 #[tokio::test]
 async fn handshake_sends_valid_request() {
@@ -172,8 +177,6 @@ async fn expect_server_error(response: Response<()>, expected_error: HttpError) 
 
         let handshake_result = machine.read().await;
 
-        const ERR: &str = "Expected an error";
-
         handshake_result
             .err()
             .map(|e| {
@@ -243,7 +246,11 @@ async fn incorrect_version() {
         .body(())
         .unwrap();
 
-    expect_server_error(response, HttpError::HttpVersion(Some(0))).await;
+    expect_server_error(
+        response,
+        HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -686,4 +693,81 @@ async fn negotiates_no_extension() {
         },
     )
     .await;
+}
+
+#[test]
+fn fails_to_build_request() {
+    fn test<E: std::error::Error + PartialEq + 'static>(request: Request<()>, expected_error: E) {
+        match build_request(request, &NoExtProvider, &ProtocolRegistry::default()) {
+            Ok(r) => {
+                panic!("Expected a test failure of {}. Got {:?}", expected_error, r);
+            }
+            Err(e) => {
+                let error = e.downcast_ref::<E>().expect(ERR);
+                assert_eq!(error, &expected_error);
+            }
+        }
+    }
+
+    test(
+        Request::builder()
+            .method(Method::POST)
+            .version(Version::HTTP_11)
+            .uri(TEST_URL)
+            .body(())
+            .unwrap(),
+        HttpError::HttpMethod(Some(Method::POST.to_string())),
+    );
+    test(
+        Request::builder()
+            .method(Method::GET)
+            .version(Version::HTTP_10)
+            .uri(TEST_URL)
+            .body(())
+            .unwrap(),
+        HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+    );
+    test(
+        Request::builder()
+            .method(Method::GET)
+            .version(Version::HTTP_11)
+            .uri("/doot/doot")
+            .body(())
+            .unwrap(),
+        HttpError::MissingAuthority,
+    );
+
+    let mut request = Request::builder()
+        .method(Method::GET)
+        .version(Version::HTTP_11)
+        .uri(TEST_URL)
+        .body(())
+        .unwrap();
+    request
+        .headers_mut()
+        .insert(CONNECTION, HeaderValue::from_static("downgrade"));
+
+    test(request, HttpError::InvalidHeader(CONNECTION));
+
+    let headers = [
+        UPGRADE,
+        SEC_WEBSOCKET_VERSION,
+        SEC_WEBSOCKET_EXTENSIONS,
+        SEC_WEBSOCKET_PROTOCOL,
+        SEC_WEBSOCKET_KEY,
+    ];
+
+    for header in headers {
+        let mut request = Request::builder()
+            .method(Method::GET)
+            .version(Version::HTTP_11)
+            .uri(TEST_URL)
+            .body(())
+            .unwrap();
+        request
+            .headers_mut()
+            .insert(header.clone(), HeaderValue::from_static("socketweb"));
+
+        test(request, HttpError::InvalidHeader(header));
+    }
 }

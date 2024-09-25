@@ -22,7 +22,7 @@ use crate::handshake::{
 use crate::handshake::{negotiate_request, TryMap};
 use crate::{Error, ErrorKind, HttpError, ProtocolRegistry};
 use bytes::{BufMut, BytesMut};
-use http::{HeaderMap, StatusCode};
+use http::{HeaderMap, StatusCode, Version};
 use httparse::Status;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
@@ -145,10 +145,10 @@ where
 pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
     match request.version {
         Some(HTTP_VERSION_INT) | None => {}
-        Some(v) => {
+        Some(_) => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::HttpVersion(Some(v)),
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
             ))
         }
     }
@@ -177,10 +177,10 @@ where
 {
     match request.version {
         Some(HTTP_VERSION_INT) => {}
-        v => {
+        _ => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::HttpVersion(v),
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
             ))
         }
     }
