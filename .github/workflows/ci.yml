@@ -19,7 +19,7 @@ jobs:
       - name: Build Documentation
         run: cargo doc --lib --no-deps --all-features --workspace
         env:
-          RUSTDOCFLAGS="--cfg docsrs -Dwarnings" cargo doc --lib --no-deps --all-features --workspace
+          RUSTDOCFLAGS: --cfg docsrs -Dwarnings
 
   testmsrv:
     name: Test Suite Latest
