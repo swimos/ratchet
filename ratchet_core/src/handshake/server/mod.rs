@@ -401,6 +401,7 @@ pub fn build_response(
 
     let mut response = http::Response::builder()
         .version(Version::HTTP_11)
+        .status(StatusCode::SWITCHING_PROTOCOLS)
         .header(
             http::header::SEC_WEBSOCKET_ACCEPT,
             HeaderValue::try_from(sec_websocket_accept)?,

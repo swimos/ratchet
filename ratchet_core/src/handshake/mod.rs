@@ -261,7 +261,9 @@ impl<'l, 'h, 'buf: 'h> TryMap<Response<()>> for &'l httparse::Response<'h, 'buf>
         let code = match self.code {
             Some(c) => match StatusCode::from_u16(c) {
                 Ok(status) => status,
-                Err(_) => return Err(HttpError::Status(Some(c))),
+                Err(_) => {
+                    return Err(HttpError::Status(Some(c)));
+                }
             },
             None => return Err(HttpError::Status(None)),
         };
