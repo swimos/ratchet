@@ -14,15 +14,14 @@
 
 use crate::handshake::io::BufferedIo;
 use crate::handshake::server::UpgradeRequest;
-use crate::handshake::TryMap;
 use crate::handshake::{
-    validate_header, validate_header_any, validate_header_value, ParseResult, METHOD_GET,
-    UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
+    validate_header, validate_header_any, validate_header_value, ParseResult, TryFromWrapper,
+    METHOD_GET, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
 };
 use crate::{Error, ErrorKind, HttpError, SubprotocolRegistry};
 use bytes::{BufMut, Bytes, BytesMut};
 use http::header::SEC_WEBSOCKET_KEY;
-use http::{HeaderMap, Method, StatusCode, Version};
+use http::{HeaderMap, Method, Request, StatusCode, Version};
 use httparse::Status;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
@@ -125,18 +124,18 @@ where
     buffered.write().await
 }
 
-pub fn try_parse_request<'h, 'b, E>(
+pub fn try_parse_request<'b, E>(
     buffer: &'b [u8],
-    mut request: httparse::Request<'h, 'b>,
+    mut request: httparse::Request<'b, 'b>,
     extension: E,
     subprotocols: &mut SubprotocolRegistry,
-) -> Result<ParseResult<httparse::Request<'h, 'b>, UpgradeRequest<E::Extension>>, Error>
+) -> Result<ParseResult<httparse::Request<'b, 'b>, UpgradeRequest<E::Extension>>, Error>
 where
     E: ExtensionProvider,
 {
     match request.parse(buffer) {
         Ok(Status::Complete(count)) => {
-            let request = request.try_map()?;
+            let request = Request::try_from(TryFromWrapper(request))?;
             parse_request(request, extension, subprotocols).map(|r| ParseResult::Complete(r, count))
         }
         Ok(Status::Partial) => Ok(ParseResult::Partial(request)),
@@ -205,7 +204,7 @@ where
     E: ExtensionProvider,
 {
     if request.version() < HTTP_VERSION {
-        // this will implicitly be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
+        // this will always be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
         return Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::HttpVersion(Some(0)),

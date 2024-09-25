@@ -27,6 +27,7 @@ use crate::{InvalidHeader, Request};
 use http::header::HeaderName;
 use http::{HeaderMap, HeaderValue, Method, Version};
 use http::{Response, StatusCode, Uri};
+use httparse::Header;
 use std::str::FromStr;
 use tokio::io::AsyncRead;
 use tokio_util::codec::Decoder;
@@ -184,21 +185,16 @@ fn validate_header_any(headers: &HeaderMap, name: HeaderName, expected: &str) ->
     })
 }
 
-/// Local replacement for TryInto that can be implemented for httparse::Header and httparse::Request
-pub trait TryMap<Target> {
-    /// Error type returned if the mapping fails
-    type Error: Into<Error>;
+struct TryFromWrapper<T>(pub T);
 
-    /// Try and map this into `Target`
-    fn try_map(self) -> Result<Target, Self::Error>;
-}
+impl<'h> TryFrom<TryFromWrapper<&'h mut [Header<'h>]>> for HeaderMap {
+    type Error = HttpError;
 
-impl<'h> TryMap<HeaderMap> for &'h [httparse::Header<'h>] {
-    type Error = InvalidHeader;
+    fn try_from(value: TryFromWrapper<&'h mut [Header<'h>]>) -> Result<Self, Self::Error> {
+        let parsed_headers = value.0;
 
-    fn try_map(self) -> Result<HeaderMap, Self::Error> {
-        let mut header_map = HeaderMap::with_capacity(self.len());
-        for header in self {
+        let mut header_map = HeaderMap::with_capacity(parsed_headers.len());
+        for header in parsed_headers {
             let header_string = || {
                 let value = String::from_utf8_lossy(header.value);
                 format!("{}: {}", header.name, value)
@@ -215,50 +211,14 @@ impl<'h> TryMap<HeaderMap> for &'h [httparse::Header<'h>] {
     }
 }
 
-impl<'l, 'h, 'buf: 'h> TryMap<Request> for &'l httparse::Request<'h, 'buf> {
+impl<'b> TryFrom<TryFromWrapper<httparse::Response<'b, 'b>>> for Response<()> {
     type Error = HttpError;
 
-    fn try_map(self) -> Result<Request, Self::Error> {
-        let mut request = Request::new(());
-        let path = match self.path {
-            Some(path) => path.parse()?,
-            None => {
-                return Err(HttpError::MalformattedUri(Some(
-                    "Missing request path".to_string(),
-                )))
-            }
-        };
-        let method = match self.method {
-            Some(m) => {
-                Method::from_str(m).map_err(|_| HttpError::HttpMethod(Some(m.to_string())))?
-            }
-            None => return Err(HttpError::HttpMethod(None)),
-        };
-        let version = match self.version {
-            Some(v) => match v {
-                0 => Version::HTTP_10,
-                1 => Version::HTTP_11,
-                n => return Err(HttpError::HttpVersion(Some(n))),
-            },
-            None => return Err(HttpError::HttpVersion(None)),
-        };
-        let headers = &self.headers;
+    fn try_from(value: TryFromWrapper<httparse::Response<'b, 'b>>) -> Result<Self, Self::Error> {
+        let parsed_response = value.0;
 
-        *request.headers_mut() = headers.try_map()?;
-        *request.uri_mut() = path;
-        *request.version_mut() = version;
-        *request.method_mut() = method;
-
-        Ok(request)
-    }
-}
-
-impl<'l, 'h, 'buf: 'h> TryMap<Response<()>> for &'l httparse::Response<'h, 'buf> {
-    type Error = HttpError;
-
-    fn try_map(self) -> Result<Response<()>, Self::Error> {
         let mut response = Response::new(());
-        let code = match self.code {
+        let code = match parsed_response.code {
             Some(c) => match StatusCode::from_u16(c) {
                 Ok(status) => status,
                 Err(_) => {
@@ -267,7 +227,7 @@ impl<'l, 'h, 'buf: 'h> TryMap<Response<()>> for &'l httparse::Response<'h, 'buf>
             },
             None => return Err(HttpError::Status(None)),
         };
-        let version = match self.version {
+        let version = match parsed_response.version {
             Some(v) => match v {
                 0 => Version::HTTP_10,
                 1 => Version::HTTP_11,
@@ -275,12 +235,50 @@ impl<'l, 'h, 'buf: 'h> TryMap<Response<()>> for &'l httparse::Response<'h, 'buf>
             },
             None => return Err(HttpError::HttpVersion(None)),
         };
-        let headers = &self.headers;
 
-        *response.headers_mut() = headers.try_map()?;
+        *response.headers_mut() = HeaderMap::try_from(TryFromWrapper(parsed_response.headers))?;
         *response.status_mut() = code;
         *response.version_mut() = version;
 
         Ok(response)
+    }
+}
+
+impl<'b> TryFrom<TryFromWrapper<httparse::Request<'b, 'b>>> for Request {
+    type Error = HttpError;
+
+    fn try_from(value: TryFromWrapper<httparse::Request<'b, 'b>>) -> Result<Self, Self::Error> {
+        let parsed_request = value.0;
+
+        let mut request = Request::new(());
+        let path = match parsed_request.path {
+            Some(path) => path.parse()?,
+            None => {
+                return Err(HttpError::MalformattedUri(Some(
+                    "Missing request path".to_string(),
+                )))
+            }
+        };
+        let method = match parsed_request.method {
+            Some(m) => {
+                Method::from_str(m).map_err(|_| HttpError::HttpMethod(Some(m.to_string())))?
+            }
+            None => return Err(HttpError::HttpMethod(None)),
+        };
+        let version = match parsed_request.version {
+            Some(v) => match v {
+                0 => Version::HTTP_10,
+                1 => Version::HTTP_11,
+                n => return Err(HttpError::HttpVersion(Some(n))),
+            },
+            None => return Err(HttpError::HttpVersion(None)),
+        };
+
+        *request.headers_mut() = HeaderMap::try_from(TryFromWrapper(parsed_request.headers))?;
+        *request.uri_mut() = path;
+        *request.version_mut() = version;
+        *request.method_mut() = method;
+
+        Ok(request)
     }
 }

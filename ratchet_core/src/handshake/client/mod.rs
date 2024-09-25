@@ -22,7 +22,7 @@ use crate::handshake::client::encoding::{build_request, encode_request};
 use crate::handshake::io::BufferedIo;
 use crate::handshake::{
     validate_header, validate_header_value, ParseResult, StreamingParser, SubprotocolRegistry,
-    TryMap, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
+    TryFromWrapper, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
 };
 use crate::{
     NoExt, NoExtProvider, Role, TryIntoRequest, WebSocket, WebSocketConfig, WebSocketStream,
@@ -311,22 +311,24 @@ fn check_partial_response(response: &Response) -> Result<(), Error> {
     }
 }
 
-fn try_parse_response<'h, 'b, E>(
-    buffer: &'h [u8],
-    mut response: Response<'h, 'b>,
+fn try_parse_response<'b, E>(
+    buffer: &'b [u8],
+    mut response: Response<'b, 'b>,
     expected_nonce: &Nonce,
     extension: E,
     subprotocols: &mut SubprotocolRegistry,
-) -> Result<ParseResult<Response<'h, 'b>, HandshakeResult<E::Extension>>, Error>
+) -> Result<ParseResult<Response<'b, 'b>, HandshakeResult<E::Extension>>, Error>
 where
-    'h: 'b,
     E: ExtensionProvider,
 {
     match response.parse(buffer) {
-        Ok(Status::Complete(count)) => {
-            parse_response(response.try_map()?, expected_nonce, extension, subprotocols)
-                .map(|r| ParseResult::Complete(r, count))
-        }
+        Ok(Status::Complete(count)) => parse_response(
+            TryFromWrapper(response).try_into()?,
+            expected_nonce,
+            extension,
+            subprotocols,
+        )
+        .map(|r| ParseResult::Complete(r, count)),
         Ok(Status::Partial) => Ok(ParseResult::Partial(response)),
         Err(e) => Err(e.into()),
     }
@@ -343,7 +345,7 @@ where
 {
     if response.version() < Version::HTTP_11 {
         // rfc6455 § 4.2.1.1: must be HTTP/1.1 or higher
-        // this will implicitly be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
+        // this will always be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
         return Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::HttpVersion(Some(0)),
