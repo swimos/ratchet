@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::errors::{CloseCause, Error, ErrorKind, ProtocolError};
-use crate::ext::NegotiatedExtension;
 use crate::framed::{FramedIo, Item};
 use crate::protocol::{
     CloseReason, ControlCode, DataCode, HeaderFlags, Message, MessageType, OpCode, PayloadType,
@@ -79,7 +78,7 @@ type SplitSocket<S, E> = (
 pub struct WebSocket<S, E> {
     framed: FramedIo<S>,
     control_buffer: BytesMut,
-    extension: NegotiatedExtension<E>,
+    extension: Option<E>,
     close_state: CloseState,
 }
 
@@ -102,7 +101,7 @@ where
     pub(crate) fn from_parts(
         framed: FramedIo<S>,
         control_buffer: BytesMut,
-        extension: NegotiatedExtension<E>,
+        extension: Option<E>,
         close_state: CloseState,
     ) -> WebSocket<S, E> {
         WebSocket {
@@ -125,7 +124,7 @@ where
     pub fn from_upgraded(
         config: WebSocketConfig,
         stream: S,
-        extension: NegotiatedExtension<E>,
+        extension: Option<E>,
         read_buffer: BytesMut,
         role: Role,
     ) -> WebSocket<S, E> {
@@ -559,8 +558,8 @@ mod tests {
     use crate::protocol::{ControlCode, DataCode, HeaderFlags, OpCode};
     use crate::ws::extension_encode;
     use crate::{
-        CloseCause, CloseCode, CloseReason, Error, Message, NegotiatedExtension, NoExt, Role,
-        WebSocket, WebSocketConfig, WebSocketStream,
+        CloseCause, CloseCode, CloseReason, Error, Message, NoExt, Role, WebSocket,
+        WebSocketConfig, WebSocketStream,
     };
     use bytes::{Bytes, BytesMut};
     use ratchet_ext::Extension;
@@ -613,20 +612,10 @@ mod tests {
         let (server, client) = duplex(512);
         let config = WebSocketConfig::default();
 
-        let server = WebSocket::from_upgraded(
-            config,
-            server,
-            NegotiatedExtension::from(NoExt),
-            BytesMut::new(),
-            Role::Server,
-        );
-        let client = WebSocket::from_upgraded(
-            config,
-            client,
-            NegotiatedExtension::from(NoExt),
-            BytesMut::new(),
-            Role::Client,
-        );
+        let server =
+            WebSocket::from_upgraded(config, server, Some(NoExt), BytesMut::new(), Role::Server);
+        let client =
+            WebSocket::from_upgraded(config, client, Some(NoExt), BytesMut::new(), Role::Client);
 
         (client, server)
     }

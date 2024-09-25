@@ -16,7 +16,7 @@ mod encoding;
 #[cfg(test)]
 mod tests;
 
-use crate::ext::{NegotiatedExtension, NoExt};
+use crate::ext::NoExt;
 use crate::handshake::io::BufferedIo;
 use crate::handshake::server::encoding::{write_response, RequestParser};
 use crate::handshake::{StreamingParser, ACCEPT_KEY};
@@ -195,7 +195,7 @@ pub struct WebSocketUpgrader<S, E> {
     subprotocol: Option<String>,
     buf: BytesMut,
     stream: S,
-    extension: NegotiatedExtension<E>,
+    extension: Option<E>,
     extension_header: Option<HeaderValue>,
     config: WebSocketConfig,
 }
@@ -315,7 +315,7 @@ where
 pub struct HandshakeResult<E> {
     key: Bytes,
     subprotocol: Option<String>,
-    extension: NegotiatedExtension<E>,
+    extension: Option<E>,
     request: Request,
     extension_header: Option<HeaderValue>,
 }

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ext::NegotiatedExtension;
 use crate::handshake::io::BufferedIo;
 use crate::handshake::server::HandshakeResult;
 use crate::handshake::{
@@ -208,13 +207,10 @@ where
 
     let key = get_header(headers, http::header::SEC_WEBSOCKET_KEY)?;
     let subprotocol = negotiate_request(subprotocols, request)?;
-    let extension_opt = extension
+    let (extension, extension_header) = extension
         .negotiate_server(request.headers)
+        .map(Option::unzip)
         .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?;
-    let (extension, extension_header) = match extension_opt {
-        Some((extension, header)) => (NegotiatedExtension::from(Some(extension)), Some(header)),
-        None => (NegotiatedExtension::from(None), None),
-    };
 
     Ok(HandshakeResult {
         key,

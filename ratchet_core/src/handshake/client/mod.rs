@@ -27,7 +27,6 @@ use sha1::{Digest, Sha1};
 use std::convert::TryFrom;
 
 use crate::errors::{Error, ErrorKind, HttpError};
-use crate::ext::NegotiatedExtension;
 use crate::handshake::client::encoding::{build_request, encode_request};
 use crate::handshake::io::BufferedIo;
 use crate::handshake::{
@@ -168,13 +167,13 @@ struct ClientHandshake<'s, S, E> {
     extension: &'s E,
 }
 
-pub struct ResponseParser<'b, E> {
+pub struct StreamingResponseParser<'b, E> {
     nonce: &'b Nonce,
     extension: &'b E,
     subprotocols: &'b mut ProtocolRegistry,
 }
 
-impl<'b, E> Decoder for ResponseParser<'b, E>
+impl<'b, E> Decoder for StreamingResponseParser<'b, E>
 where
     E: ExtensionProvider,
 {
@@ -182,14 +181,14 @@ where
     type Error = Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let ResponseParser {
+        let StreamingResponseParser {
             nonce,
             extension,
             subprotocols,
         } = self;
 
         let mut headers = [httparse::EMPTY_HEADER; 32];
-        let mut response = httparse::Response::new(&mut headers);
+        let mut response = Response::new(&mut headers);
 
         match try_parse_response(buf, &mut response, nonce, extension, subprotocols)? {
             ParseResult::Complete(result, count) => Ok(Some((result, count))),
@@ -251,7 +250,7 @@ where
 
         let parser = StreamingParser::new(
             buffered,
-            ResponseParser {
+            StreamingResponseParser {
                 nonce,
                 extension,
                 subprotocols,
@@ -276,7 +275,7 @@ where
 #[derive(Debug)]
 pub struct HandshakeResult<E> {
     pub subprotocol: Option<String>,
-    pub extension: NegotiatedExtension<E>,
+    pub extension: Option<E>,
 }
 
 /// Quickly checks a partial response in the order of the expected HTTP response declaration to see
@@ -399,7 +398,6 @@ where
         subprotocol: negotiate_response(subprotocols, response)?,
         extension: extension
             .negotiate_client(response.headers)
-            .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?
-            .into(),
+            .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?,
     })
 }

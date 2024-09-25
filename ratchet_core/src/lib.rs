@@ -53,7 +53,7 @@ pub mod fixture {
 
 pub use builder::{WebSocketClientBuilder, WebSocketServerBuilder};
 pub use errors::*;
-pub use ext::{NegotiatedExtension, NoExt, NoExtDecoder, NoExtEncoder, NoExtProvider};
+pub use ext::{NoExt, NoExtDecoder, NoExtEncoder, NoExtProvider};
 pub use handshake::{
     accept, accept_with, subscribe, subscribe_with, ProtocolRegistry, TryIntoRequest,
     UpgradedClient, UpgradedServer, WebSocketResponse, WebSocketUpgrader,

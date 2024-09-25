@@ -25,7 +25,6 @@ use tokio::io::AsyncWriteExt;
 use bilock::{bilock, BiLock};
 use ratchet_ext::{ExtensionDecoder, ExtensionEncoder, ReunitableExtension, SplittableExtension};
 
-use crate::ext::NegotiatedExtension;
 use crate::framed::{
     read_next, write_close, write_fragmented, CodecFlags, FramedIoParts, FramedRead, FramedWrite,
     Item,
@@ -61,7 +60,7 @@ const STATE_CLOSED: u8 = 2;
 pub fn split<S, E>(
     framed: framed::FramedIo<S>,
     control_buffer: BytesMut,
-    extension: NegotiatedExtension<E>,
+    extension: Option<E>,
 ) -> (Sender<S, E::SplitEncoder>, Receiver<S, E::SplitDecoder>)
 where
     S: WebSocketStream,
@@ -228,7 +227,7 @@ struct FramedIo<S, E> {
     read_half: BiLock<S>,
     reader: FramedRead,
     split_writer: BiLock<WriteHalf<S>>,
-    ext_decoder: NegotiatedExtension<E>,
+    ext_decoder: Option<E>,
 }
 
 /// An owned write half of a WebSocket connection.
@@ -237,7 +236,7 @@ pub struct Sender<S, E> {
     role: Role,
     close_state: Arc<AtomicU8>,
     split_writer: BiLock<WriteHalf<S>>,
-    ext_encoder: NegotiatedExtension<E>,
+    ext_encoder: Option<E>,
 }
 
 impl<S, E> Sender<S, E>
@@ -747,7 +746,7 @@ where
         Ok(WebSocket::from_parts(
             framed,
             control_buffer,
-            NegotiatedExtension::reunite(ext_encoder, ext_decoder),
+            Option::<E>::reunite(ext_encoder, ext_decoder),
             close_state,
         ))
     } else {
