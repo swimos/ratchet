@@ -36,16 +36,9 @@ use crate::handshake::{
 use crate::{
     NoExt, NoExtProvider, Role, TryIntoRequest, WebSocket, WebSocketConfig, WebSocketStream,
 };
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
-use bytes::BytesMut;
 use http::header::LOCATION;
-use http::{header, Request, StatusCode, Version};
-use httparse::{Response, Status};
-use log::{error, trace, warn};
+use log::warn;
 use ratchet_ext::ExtensionProvider;
-use sha1::{Digest, Sha1};
-use std::convert::TryFrom;
 use tokio_util::codec::Decoder;
 
 type Nonce = [u8; 24];
@@ -356,13 +349,10 @@ where
 {
     if response.version() < Version::HTTP_11 {
         // rfc6455 § 4.2.1.1: must be HTTP/1.1 or higher
-        Some(1) => {}
-        _ => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-            ))
-        }
+        return Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+        ));
     }
 
     let status_code = response.status();

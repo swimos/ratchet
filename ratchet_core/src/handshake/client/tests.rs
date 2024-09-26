@@ -708,7 +708,7 @@ async fn negotiates_no_extension() {
 #[test]
 fn fails_to_build_request() {
     fn test<E: std::error::Error + PartialEq + 'static>(request: Request<()>, expected_error: E) {
-        match build_request(request, &NoExtProvider, &ProtocolRegistry::default()) {
+        match build_request(request, &NoExtProvider, &SubprotocolRegistry::default()) {
             Ok(r) => {
                 panic!("Expected a test failure of {}. Got {:?}", expected_error, r);
             }

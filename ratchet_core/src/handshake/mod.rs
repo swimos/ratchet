@@ -25,8 +25,9 @@ use crate::errors::{ErrorKind, HttpError};
 use crate::handshake::io::BufferedIo;
 use crate::{InvalidHeader, Request};
 use http::header::HeaderName;
-use http::{StatusCode, Uri};
-use http::{HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, Method, Response};
+use http::{StatusCode, Uri, Version};
+use httparse::Header;
 use log::{error, trace, warn};
 use std::str::FromStr;
 use tokio::io::AsyncRead;
@@ -241,18 +242,10 @@ impl<'b> TryFrom<TryFromWrapper<httparse::Response<'b, 'b>>> for Response<()> {
             },
             None => return Err(HttpError::MissingStatus),
         };
-        let version = match parsed_response.version {
-            Some(v) => match v {
-                0 => Version::HTTP_10,
-                1 => Version::HTTP_11,
-                n => return Err(HttpError::HttpVersion(Some(n))),
-            },
-            None => return Err(HttpError::HttpVersion(None)),
-        };
 
         *response.headers_mut() = HeaderMap::try_from(TryFromWrapper(parsed_response.headers))?;
         *response.status_mut() = code;
-        *response.version_mut() = version;
+        *response.version_mut() = parse_version(parsed_response.version)?;
 
         Ok(response)
     }
@@ -279,20 +272,23 @@ impl<'b> TryFrom<TryFromWrapper<httparse::Request<'b, 'b>>> for Request {
             }
             None => return Err(HttpError::HttpMethod(None)),
         };
-        let version = match parsed_request.version {
-            Some(v) => match v {
-                0 => Version::HTTP_10,
-                1 => Version::HTTP_11,
-                n => return Err(HttpError::HttpVersion(Some(n))),
-            },
-            None => return Err(HttpError::HttpVersion(None)),
-        };
 
         *request.headers_mut() = HeaderMap::try_from(TryFromWrapper(parsed_request.headers))?;
         *request.uri_mut() = path;
-        *request.version_mut() = version;
+        *request.version_mut() = parse_version(parsed_request.version)?;
         *request.method_mut() = method;
 
         Ok(request)
+    }
+}
+
+fn parse_version(version: Option<u8>) -> Result<Version, HttpError> {
+    match version {
+        Some(v) => match v {
+            0 => Ok(Version::HTTP_10),
+            1 => Ok(Version::HTTP_11),
+            n => Err(HttpError::HttpVersion(n.to_string())),
+        },
+        None => Err(HttpError::HttpVersion("Missing HTTP version".to_string())),
     }
 }

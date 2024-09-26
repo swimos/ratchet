@@ -15,14 +15,14 @@
 use crate::handshake::io::BufferedIo;
 use crate::handshake::server::UpgradeRequest;
 use crate::handshake::{
-    validate_header, validate_header_any, validate_header_value, ParseResult, TryFromWrapper,
-    METHOD_GET, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
+    validate_header_any, validate_header_value, ParseResult, TryFromWrapper, METHOD_GET,
+    UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
 };
 use crate::{Error, ErrorKind, HttpError, SubprotocolRegistry};
 use bytes::{BufMut, Bytes, BytesMut};
 use http::header::{HOST, SEC_WEBSOCKET_KEY};
 use http::{HeaderMap, Method, Request, StatusCode, Version};
-use httparse::{Header, Status};
+use httparse::Status;
 use log::error;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
@@ -208,7 +208,7 @@ where
         return Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-        ))
+        ));
     }
 
     if request.method() != Method::GET {
@@ -254,12 +254,12 @@ where
 }
 
 /// Validates that 'headers' contains one 'host' header and that it is not a seperated list.
-fn validate_host_header(headers: &[Header]) -> Result<(), Error> {
+fn validate_host_header(headers: &HeaderMap) -> Result<(), Error> {
     let len = headers
         .iter()
-        .filter_map(|header| {
-            if header.name.eq_ignore_ascii_case(HOST.as_str()) {
-                Some(header.value.split(|c| c == &b' ' || c == &b','))
+        .filter_map(|(name, value)| {
+            if name.as_str().eq_ignore_ascii_case(HOST.as_str()) {
+                Some(value.as_bytes().split(|c| c == &b' ' || c == &b','))
             } else {
                 None
             }
