@@ -14,7 +14,7 @@
 
 use base64::Engine;
 use bytes::BytesMut;
-use http::header::{SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL};
+use http::header::{HOST, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL};
 use http::request::Parts;
 use http::{header, HeaderMap, HeaderName, HeaderValue, Method, Request, Version};
 
@@ -34,7 +34,6 @@ pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffe
         version,
         headers,
         path_and_query,
-        host,
     } = request;
 
     let nonce = rand::random::<[u8; 16]>();
@@ -50,11 +49,9 @@ pub fn encode_request(dst: &mut BytesMut, request: ValidatedRequest, nonce_buffe
     let request = format!(
         "\
 GET {path} {version:?}\r\n\
-Host: {host}\r\n\
 sec-websocket-key: {nonce}",
         version = version,
         path = path_and_query,
-        host = host,
         nonce = nonce_str
     );
 
@@ -80,7 +77,6 @@ pub struct ValidatedRequest {
     version: Version,
     headers: HeaderMap,
     path_and_query: String,
-    host: String,
 }
 
 // rfc6455 § 4.2.1
@@ -129,16 +125,28 @@ where
     // Run this first to ensure that the extension doesn't invalidate the headers.
     extension.apply_headers(&mut headers);
 
-    let authority = uri
-        .authority()
-        .ok_or_else(|| Error::with_cause(ErrorKind::Http, HttpError::MissingAuthority))?
-        .as_str()
-        .to_string();
-    validate_or_insert(
-        &mut headers,
-        header::HOST,
-        HeaderValue::from_str(authority.as_ref())?,
-    )?;
+    match validate_host_header(&headers) {
+        Ok(()) => {
+            // The request should only contain *one* 'host' header, and it must be a single value,
+            // not a comma seperated list. If the request doesn't already have one then derive it
+            // from the URI if it contains an authority. If it doesn't, then the request is invalid
+            // and any correct server implementation would reject it - including Ratchet.
+            let authority = uri
+                .authority()
+                .ok_or_else(|| Error::with_cause(ErrorKind::Http, HttpError::MissingAuthority))?
+                .as_str()
+                .to_string();
+            validate_or_insert(
+                &mut headers,
+                header::HOST,
+                HeaderValue::from_str(authority.as_ref())?,
+            )?;
+        }
+        Err(e) => {
+            error!("Request should only contain one 'host' header. {e}");
+            return Err(e);
+        }
+    }
 
     validate_or_insert(
         &mut headers,
@@ -178,16 +186,6 @@ where
         ));
     }
 
-    let host = uri
-        .authority()
-        .ok_or_else(|| {
-            Error::with_cause(
-                ErrorKind::Http,
-                HttpError::MalformattedUri(Some("Missing authority".to_string())),
-            )
-        })?
-        .to_string();
-
     let path_and_query = uri
         .path_and_query()
         .map(ToString::to_string)
@@ -197,7 +195,6 @@ where
         version,
         headers,
         path_and_query,
-        host,
     })
 }
 
@@ -217,5 +214,27 @@ fn validate_or_insert(
     } else {
         headers.insert(header_name, expected);
         Ok(())
+    }
+}
+
+/// Validates that 'headers' contains at most one 'host' header and that it is not a seperated list.
+fn validate_host_header(headers: &HeaderMap) -> Result<(), Error> {
+    let len = headers
+        .iter()
+        .filter_map(|(name, value)| {
+            if name.as_str().eq_ignore_ascii_case(HOST.as_str()) {
+                Some(value.as_bytes().split(|c| c == &b' ' || c == &b','))
+            } else {
+                None
+            }
+        })
+        .count();
+    if len <= 1 {
+        Ok(())
+    } else {
+        Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::InvalidHeader(HOST),
+        ))
     }
 }

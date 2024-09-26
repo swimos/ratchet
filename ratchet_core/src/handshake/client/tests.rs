@@ -24,8 +24,8 @@ use bytes::BytesMut;
 use futures::future::join;
 use futures::FutureExt;
 use http::header::{
-    HeaderName, CONNECTION, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL,
-    SEC_WEBSOCKET_VERSION, UPGRADE,
+    HeaderName, CONNECTION, HOST, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY,
+    SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE,
 };
 use http::{header, HeaderMap, HeaderValue, Method, Request, Response, StatusCode, Version};
 use httparse::{Header, Status};
@@ -727,15 +727,18 @@ fn fails_to_build_request() {
             .unwrap(),
         HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
     );
-    test(
-        Request::builder()
-            .method(Method::GET)
-            .version(Version::HTTP_11)
-            .uri("/doot/doot")
-            .body(())
-            .unwrap(),
-        HttpError::MissingAuthority,
-    );
+
+    let mut request = Request::builder()
+        .method(Method::GET)
+        .version(Version::HTTP_11)
+        .uri("/doot/doot")
+        .body(())
+        .unwrap();
+    request
+        .headers_mut()
+        .insert(HOST, HeaderValue::from_static("hosty"));
+
+    test(request, HttpError::MissingAuthority);
 
     let mut request = Request::builder()
         .method(Method::GET)
@@ -746,6 +749,9 @@ fn fails_to_build_request() {
     request
         .headers_mut()
         .insert(CONNECTION, HeaderValue::from_static("downgrade"));
+    request
+        .headers_mut()
+        .insert(HOST, HeaderValue::from_static("127.0.0.1:9001"));
 
     test(request, HttpError::InvalidHeader(CONNECTION));
 
@@ -766,8 +772,29 @@ fn fails_to_build_request() {
             .unwrap();
         request
             .headers_mut()
+            .insert(UPGRADE, HeaderValue::from_static("websocket"));
+        request
+            .headers_mut()
+            .insert(HOST, HeaderValue::from_static("127.0.0.1:9001"));
+        request
+            .headers_mut()
             .insert(header.clone(), HeaderValue::from_static("socketweb"));
 
         test(request, HttpError::InvalidHeader(header));
     }
+
+    let mut request = Request::builder()
+        .method(Method::GET)
+        .version(Version::HTTP_11)
+        .uri(TEST_URL)
+        .body(())
+        .unwrap();
+    request
+        .headers_mut()
+        .insert(HOST, HeaderValue::from_static("hostedbyhosts"));
+    request
+        .headers_mut()
+        .insert(HOST, HeaderValue::from_static("hostymchostface"));
+
+    test(request, HttpError::InvalidHeader(HOST));
 }

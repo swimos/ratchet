@@ -40,7 +40,7 @@ impl<'s, S> BufferedIo<'s, S> {
         Ok(())
     }
 
-    pub async fn read(&mut self) -> Result<(), Error>
+    pub async fn read(&mut self) -> Result<usize, Error>
     where
         S: AsyncRead + Unpin,
     {
@@ -51,7 +51,7 @@ impl<'s, S> BufferedIo<'s, S> {
         let read_count = socket.read(&mut buffer[len..]).await?;
         buffer.truncate(len + read_count);
 
-        Ok(())
+        Ok(read_count)
     }
 
     pub fn advance(&mut self, count: usize) {

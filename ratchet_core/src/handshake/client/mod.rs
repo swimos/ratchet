@@ -228,12 +228,14 @@ where
             subprotocols,
         } = self;
 
+        trace!("Encoding request: {request:?}");
         let validated_request = build_request(request, extension, subprotocols)?;
         encode_request(buffered.buffer, validated_request, nonce);
         Ok(())
     }
 
     async fn write(&mut self) -> Result<(), Error> {
+        trace!("Writing buffered data");
         self.buffered.write().await
     }
 

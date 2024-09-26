@@ -90,7 +90,6 @@ async fn bad_request() {
         }
     }
 
-    // request doesn't implement clone
     t(
         Request::builder()
             .uri("/test")

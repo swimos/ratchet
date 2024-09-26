@@ -28,6 +28,7 @@ use bytes::Bytes;
 use http::header::HeaderName;
 use http::Uri;
 use http::{HeaderMap, HeaderValue};
+use log::{error, trace, warn};
 use std::str::FromStr;
 use tokio::io::AsyncRead;
 use tokio_util::codec::Decoder;
@@ -62,15 +63,29 @@ where
         let StreamingParser { io, mut parser } = self;
 
         loop {
-            io.read().await?;
+            let n = io.read().await?;
+
+            if n == 0 {
+                warn!("Received early EOF");
+                return Err(Error::with_cause(
+                    ErrorKind::IO,
+                    std::io::Error::from(std::io::ErrorKind::UnexpectedEof),
+                ));
+            } else {
+                trace!("Read {n} bytes. Attempting to decode");
+            }
 
             match parser.decode(io.buffer) {
                 Ok(Some((out, count))) => {
+                    trace!("Decoded: {count} bytes");
                     io.advance(count);
                     return Ok(out);
                 }
                 Ok(None) => continue,
-                Err(e) => return Err(e),
+                Err(e) => {
+                    error!("Failed to decode response. Error: {e}");
+                    return Err(e);
+                }
             }
         }
     }
