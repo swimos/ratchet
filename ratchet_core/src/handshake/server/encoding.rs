@@ -20,9 +20,10 @@ use crate::handshake::{
 };
 use crate::{Error, ErrorKind, HttpError, SubprotocolRegistry};
 use bytes::{BufMut, Bytes, BytesMut};
-use http::header::SEC_WEBSOCKET_KEY;
+use http::header::{HOST, SEC_WEBSOCKET_KEY};
 use http::{HeaderMap, Method, Request, StatusCode, Version};
-use httparse::Status;
+use httparse::{Header, Status};
+use log::error;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
 use tokio_util::codec::Decoder;
@@ -146,10 +147,10 @@ where
 pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
     match request.version {
         Some(HTTP_VERSION_INT) | None => {}
-        Some(v) => {
+        Some(_) => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::HttpVersion(Some(v)),
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
             ))
         }
     }
@@ -204,11 +205,10 @@ where
     E: ExtensionProvider,
 {
     if request.version() < HTTP_VERSION {
-        // this will always be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
         return Err(Error::with_cause(
             ErrorKind::Http,
-            HttpError::HttpVersion(Some(0)),
-        ));
+            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+        ))
     }
 
     if request.method() != Method::GET {
@@ -227,7 +227,10 @@ where
         WEBSOCKET_VERSION_STR,
     )?;
 
-    validate_header(headers, http::header::HOST, |_, _| Ok(()))?;
+    if let Err(e) = validate_host_header(headers) {
+        error!("Server responded with invalid 'host' headers");
+        return Err(e);
+    }
 
     let key = headers
         .get(SEC_WEBSOCKET_KEY)
@@ -248,4 +251,26 @@ where
         extension_header,
         request,
     })
+}
+
+/// Validates that 'headers' contains one 'host' header and that it is not a seperated list.
+fn validate_host_header(headers: &[Header]) -> Result<(), Error> {
+    let len = headers
+        .iter()
+        .filter_map(|header| {
+            if header.name.eq_ignore_ascii_case(HOST.as_str()) {
+                Some(header.value.split(|c| c == &b' ' || c == &b','))
+            } else {
+                None
+            }
+        })
+        .count();
+    if len == 1 {
+        Ok(())
+    } else {
+        Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::MissingHeader(HOST),
+        ))
+    }
 }

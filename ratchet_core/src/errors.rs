@@ -162,7 +162,7 @@ pub enum HttpError {
     MissingStatus,
     /// An invalid HTTP version was received in a request or response.
     #[error("Invalid HTTP version: `{0:?}`")]
-    HttpVersion(Option<u8>),
+    HttpVersion(String),
     /// A request or response was missing an expected header.
     #[error("Missing header: `{0}`")]
     MissingHeader(HeaderName),
@@ -178,6 +178,9 @@ pub enum HttpError {
     /// A provided header was malformatted
     #[error("A provided header was malformatted")]
     MalformattedHeader(String),
+    /// A request was missing the authority.
+    #[error("Missing authority")]
+    MissingAuthority,
 }
 
 impl From<HttpError> for Error {

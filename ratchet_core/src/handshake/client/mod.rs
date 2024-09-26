@@ -17,6 +17,15 @@ mod tests;
 
 mod encoding;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use bytes::BytesMut;
+use http::{header, Request, StatusCode, Version};
+use httparse::{Response, Status};
+use log::{error, trace};
+use sha1::{Digest, Sha1};
+use std::convert::TryFrom;
+
 use crate::errors::{Error, ErrorKind, HttpError};
 use crate::handshake::client::encoding::{build_request, encode_request};
 use crate::handshake::io::BufferedIo;
@@ -227,12 +236,14 @@ where
             subprotocols,
         } = self;
 
+        trace!("Encoding request: {request:?}");
         let validated_request = build_request(request, extension, subprotocols)?;
         encode_request(buffered.buffer, validated_request, nonce);
         Ok(())
     }
 
     async fn write(&mut self) -> Result<(), Error> {
+        trace!("Writing buffered data");
         self.buffered.write().await
     }
 
@@ -285,10 +296,10 @@ fn check_partial_response(response: &Response) -> Result<(), Error> {
         // httparse sets this to 0 for HTTP/1.0 or 1 for HTTP/1.1
         // rfc6455 § 4.2.1.1: must be HTTP/1.1 or higher
         Some(1) | None => {}
-        Some(v) => {
+        Some(_) => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::HttpVersion(Some(v)),
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
             ))
         }
     }
@@ -345,11 +356,13 @@ where
 {
     if response.version() < Version::HTTP_11 {
         // rfc6455 § 4.2.1.1: must be HTTP/1.1 or higher
-        // this will always be 0 as httparse only parses HTTP/1.x and 1.0 is 0.
-        return Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::HttpVersion(Some(0)),
-        ));
+        Some(1) => {}
+        _ => {
+            return Err(Error::with_cause(
+                ErrorKind::Http,
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+            ))
+        }
     }
 
     let status_code = response.status();
