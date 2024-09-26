@@ -33,7 +33,7 @@ use bytes::BytesMut;
 use http::header::LOCATION;
 use http::{header, Request, StatusCode, Version};
 use httparse::{Response, Status};
-use log::{error, trace};
+use log::{error, trace, warn};
 use ratchet_ext::ExtensionProvider;
 use sha1::{Digest, Sha1};
 use std::convert::TryFrom;
@@ -303,7 +303,7 @@ fn check_partial_response(response: &Response) -> Result<(), Error> {
         Some(code) => match StatusCode::try_from(code) {
             Ok(code) => Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::Status(Some(code.as_u16())),
+                HttpError::Status(code.as_u16()),
             )),
             Err(_) => Err(Error::with_cause(ErrorKind::Http, BAD_STATUS_CODE)),
         },
@@ -366,16 +366,19 @@ where
                         HttpError::Redirected(location),
                     ))
                 }
-                None => Err(Error::with_cause(
-                    ErrorKind::Http,
-                    HttpError::Status(Some(c.as_u16())),
-                )),
+                None => {
+                    warn!("Received a redirection status code with no location header");
+                    Err(Error::with_cause(
+                        ErrorKind::Http,
+                        HttpError::Status(c.as_u16()),
+                    ))
+                }
             };
         }
         status_code => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::Status(Some(status_code.as_u16())),
+                HttpError::Status(status_code.as_u16()),
             ))
         }
     }

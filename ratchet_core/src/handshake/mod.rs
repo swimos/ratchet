@@ -222,10 +222,10 @@ impl<'b> TryFrom<TryFromWrapper<httparse::Response<'b, 'b>>> for Response<()> {
             Some(c) => match StatusCode::from_u16(c) {
                 Ok(status) => status,
                 Err(_) => {
-                    return Err(HttpError::Status(Some(c)));
+                    return Err(HttpError::Status(c));
                 }
             },
-            None => return Err(HttpError::Status(None)),
+            None => return Err(HttpError::MissingStatus),
         };
         let version = match parsed_response.version {
             Some(v) => match v {

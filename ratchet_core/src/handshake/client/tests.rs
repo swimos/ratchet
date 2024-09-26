@@ -235,7 +235,7 @@ async fn bad_status_code() {
 
     expect_server_error(
         response,
-        HttpError::Status(Some(StatusCode::IM_A_TEAPOT.as_u16())),
+        HttpError::Status(StatusCode::IM_A_TEAPOT.as_u16()),
     )
     .await;
 }
