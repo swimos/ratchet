@@ -22,8 +22,8 @@ pub use frame::*;
 pub use mask::apply_mask;
 
 use bytes::Bytes;
-use derive_more::Display;
 use std::convert::TryFrom;
+use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 bitflags::bitflags! {
@@ -166,12 +166,16 @@ impl Role {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OpCode {
-    #[display(fmt = "{}", _0)]
     DataCode(DataCode),
-    #[display(fmt = "{}", _0)]
     ControlCode(ControlCode),
+}
+
+impl Display for OpCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl OpCode {
@@ -193,11 +197,17 @@ impl From<OpCode> for u8 {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DataCode {
     Continuation = 0,
     Text = 1,
     Binary = 2,
+}
+
+impl Display for DataCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl From<DataCode> for ratchet_ext::OpCode {
@@ -210,11 +220,17 @@ impl From<DataCode> for ratchet_ext::OpCode {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ControlCode {
     Close = 8,
     Ping = 9,
     Pong = 10,
+}
+
+impl Display for ControlCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Copy, Clone, Debug, Error, PartialEq, Eq)]

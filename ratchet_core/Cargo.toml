@@ -23,7 +23,6 @@ tokio = { workspace = true, features = ["rt", "net", "io-util"] }
 tokio-util = { workspace = true, features = ["codec", "compat"] }
 futures = { workspace = true, optional = true }
 futures-util = { workspace = true }
-derive_more = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 rand = { workspace = true, features = ["std", "small_rng", "getrandom"] }
