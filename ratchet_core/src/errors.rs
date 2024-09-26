@@ -157,10 +157,10 @@ pub enum HttpError {
     /// The peer returned with a status code other than 101.
     #[error("Status code: `{0:?}`")]
     Status(u16),
-    /// A request was missing its status code
+    /// A request or response was missing its status code.
     #[error("Missing status code")]
     MissingStatus,
-    /// An invalid HTTP version was received in a request.
+    /// An invalid HTTP version was received in a request or response.
     #[error("Invalid HTTP version: `{0:?}`")]
     HttpVersion(Option<u8>),
     /// A request or response was missing an expected header.
