@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::handshake::io::BufferedIo;
-use crate::handshake::server::UpgradeRequest;
+use crate::handshake::server::{UpgradeRequest, UpgradeRequestParts};
 use crate::handshake::{
     validate_header_any, validate_header_value, ParseResult, TryFromWrapper, METHOD_GET,
     UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
@@ -21,6 +21,7 @@ use crate::handshake::{
 use crate::{Error, ErrorKind, HttpError, SubprotocolRegistry};
 use bytes::{BufMut, Bytes, BytesMut};
 use http::header::{HOST, SEC_WEBSOCKET_KEY};
+use http::request::Parts;
 use http::{HeaderMap, Method, Request, StatusCode, Version};
 use httparse::Status;
 use log::error;
@@ -137,7 +138,31 @@ where
     match request.parse(buffer) {
         Ok(Status::Complete(count)) => {
             let request = Request::try_from(TryFromWrapper(request))?;
-            parse_request(request, extension, subprotocols).map(|r| ParseResult::Complete(r, count))
+            let (parts, body) = request.into_parts();
+            let Parts {
+                method,
+                version,
+                headers,
+                ..
+            } = &parts;
+
+            let UpgradeRequestParts {
+                key,
+                subprotocol,
+                extension,
+                extension_header,
+            } = parse_request(*version, method, headers, extension, subprotocols)?;
+
+            Ok(ParseResult::Complete(
+                UpgradeRequest {
+                    key,
+                    subprotocol,
+                    extension,
+                    request: Request::from_parts(parts, body),
+                    extension_header,
+                },
+                count,
+            ))
         }
         Ok(Status::Partial) => Ok(ParseResult::Partial(request)),
         Err(e) => Err(e.into()),
@@ -196,29 +221,30 @@ pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
 /// - `Err(Error)`: Contains an error if the request is invalid or cannot be parsed.
 ///   This could include issues such as unsupported HTTP versions, invalid methods,
 ///   missing required headers, or failed negotiations for subprotocols or extensions.
-pub fn parse_request<E, B>(
-    request: http::Request<B>,
+pub fn parse_request<E>(
+    version: Version,
+    method: &Method,
+    headers: &HeaderMap,
     extension: E,
     subprotocols: &SubprotocolRegistry,
-) -> Result<UpgradeRequest<E::Extension, B>, Error>
+) -> Result<UpgradeRequestParts<E::Extension>, Error>
 where
     E: ExtensionProvider,
 {
-    if request.version() < HTTP_VERSION {
+    if version < HTTP_VERSION {
         return Err(Error::with_cause(
             ErrorKind::Http,
             HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
         ));
     }
 
-    if request.method() != Method::GET {
+    if method != Method::GET {
         return Err(Error::with_cause(
             ErrorKind::Http,
-            HttpError::HttpMethod(Some(request.method().to_string())),
+            HttpError::HttpMethod(Some(method.to_string())),
         ));
     }
 
-    let headers = request.headers();
     validate_header_any(headers, http::header::CONNECTION, UPGRADE_STR)?;
     validate_header_value(headers, http::header::UPGRADE, WEBSOCKET_STR)?;
     validate_header_value(
@@ -244,12 +270,11 @@ where
         .map(Option::unzip)
         .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?;
 
-    Ok(UpgradeRequest {
+    Ok(UpgradeRequestParts {
         key,
         extension,
         subprotocol,
         extension_header,
-        request,
     })
 }
 

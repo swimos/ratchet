@@ -30,8 +30,9 @@ use crate::{
 };
 use base64::engine::{general_purpose::STANDARD, Engine};
 use bytes::{Bytes, BytesMut};
+use http::request::Parts;
 use http::status::InvalidStatusCode;
-use http::{HeaderMap, HeaderValue, StatusCode, Uri, Version};
+use http::{HeaderMap, HeaderValue, Method, Response, StatusCode, Uri, Version};
 use log::{error, trace};
 use ratchet_ext::{Extension, ExtensionProvider};
 use sha1::{Digest, Sha1};
@@ -319,6 +320,38 @@ where
     }
 }
 
+/// Represents a parsed WebSocket connection upgrade HTTP request without the context of the
+/// request that it is responding to.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct UpgradeRequestParts<E> {
+    /// The security key provided by the client during the WebSocket handshake.
+    ///
+    /// This key is used by the server to generate a response key,  confirming that the server
+    /// accepts the WebSocket upgrade request.
+    pub key: Bytes,
+
+    /// The optional WebSocket subprotocol agreed upon during the handshake.
+    ///
+    /// The subprotocol is used to define the application-specific communication on top of the
+    /// WebSocket connection, such as `wamp` or `graphql-ws`. If no subprotocol is requested or
+    /// agreed upon, this will be `None`.
+    pub subprotocol: Option<String>,
+
+    /// The optional WebSocket extension negotiated during the handshake.
+    ///
+    /// Extensions allow WebSocket connections to have additional functionality, such as compression
+    /// or multiplexing. This field represents any such negotiated extension, or `None` if no
+    /// extensions were negotiated.
+    pub extension: Option<E>,
+
+    /// The optional `Sec-WebSocket-Extensions` header value from the HTTP request.
+    ///
+    /// This header may contain the raw extension details sent by the client during  the handshake.
+    /// If no extension was requested, this field will be `None`.
+    pub extension_header: Option<HeaderValue>,
+}
+
 /// Represents a parsed WebSocket connection upgrade HTTP request.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -393,36 +426,12 @@ pub fn build_response(
     subprotocol: Option<String>,
     extension_header: Option<HeaderValue>,
 ) -> Result<http::Response<()>, Error> {
-    let mut digest = Sha1::new();
-    Digest::update(&mut digest, key);
-    Digest::update(&mut digest, ACCEPT_KEY);
-
-    let sec_websocket_accept = STANDARD.encode(digest.finalize());
-
     let mut response = http::Response::builder()
         .version(Version::HTTP_11)
-        .status(StatusCode::SWITCHING_PROTOCOLS)
-        .header(
-            http::header::SEC_WEBSOCKET_ACCEPT,
-            HeaderValue::try_from(sec_websocket_accept)?,
-        )
-        .header(
-            http::header::UPGRADE,
-            HeaderValue::from_static(WEBSOCKET_STR),
-        )
-        .header(
-            http::header::CONNECTION,
-            HeaderValue::from_static(UPGRADE_STR),
-        );
+        .status(StatusCode::SWITCHING_PROTOCOLS);
 
-    if let Some(subprotocol) = &subprotocol {
-        response = response.header(
-            http::header::SEC_WEBSOCKET_PROTOCOL,
-            HeaderValue::try_from(subprotocol)?,
-        );
-    }
-    if let Some(extension_header) = extension_header {
-        response = response.header(http::header::SEC_WEBSOCKET_EXTENSIONS, extension_header);
+    if let Some(headers) = response.headers_mut() {
+        *headers = build_response_headers(key, subprotocol, extension_header)?;
     }
 
     Ok(response.body(())?)
@@ -474,19 +483,151 @@ pub fn handshake<E, B>(
     request: http::Request<B>,
     extension: &E,
     subprotocols: &SubprotocolRegistry,
-) -> Result<(http::Response<()>, Option<E::Extension>), Error>
+) -> Result<(Response<()>, Option<E::Extension>), Error>
 where
     E: ExtensionProvider,
 {
-    let UpgradeRequest {
+    let (parts, _body) = request.into_parts();
+    let Parts {
+        method,
+        version,
+        headers,
+        ..
+    } = parts;
+    let UpgradeRequestParts {
         key,
         subprotocol,
         extension,
         extension_header,
         ..
-    } = parse_request(request, extension, subprotocols)?;
+    } = parse_request(version, &method, &headers, extension, subprotocols)?;
     Ok((
         build_response(key, subprotocol, extension_header)?,
         extension,
     ))
+}
+
+/// Processes a WebSocket handshake request from its parts and generates the appropriate response.
+///
+/// This function handles the server-side part of a WebSocket handshake. It parses the incoming HTTP
+/// request parts that seeks to upgrade the connection to WebSocket, negotiates extensions and
+/// subprotocols, and constructs an appropriate HTTP response to complete the WebSocket handshake.
+///
+/// # Arguments
+///
+/// - `version`: The HTTP `Version` of the request.
+/// - `method`: The HTTP `Method` of the request, which must be `GET` for WebSocket handshakes.
+/// - `headers`: A reference to the request's `HeaderMap` containing the HTTP headers. These headers
+///  must include the necessary WebSocket headers such as `Sec-WebSocket-Key` and `Upgrade`.
+/// - `extension`: An extension that may be negotiated for the connection.
+/// - `subprotocols`: A `SubprotocolRegistry`, which will be used to attempt to negotiate a
+/// subprotocol.
+///
+/// # Returns
+///
+/// This function returns a `Result` containing:
+/// - A tuple consisting of:
+///   - An `http::Response<()>`, which represents the WebSocket handshake response.
+///     The response includes headers such as `Sec-WebSocket-Accept` to confirm the upgrade.
+///   - An optional `E::Extension`, which represents the negotiated extension, if any.
+///
+/// If the handshake fails, an `Error` is returned, which may be caused by invalid
+/// requests, issues parsing headers, or problems negotiating the WebSocket subprotocols
+/// or extensions.
+///
+/// # Type Parameters
+///
+/// - `E`: The type of the extension provider, which must implement the `ExtensionProvider`
+///   trait. This defines how WebSocket extensions (like compression) are handled.
+/// - `B`: The body type of the HTTP request. While it is discouraged for GET requests to have a body
+///  it is not technically incorrect and the use of this function is lowering the guardrails to
+///  allow for Ratchet to be more easily integrated into other libraries. It is the implementors
+///  responsibility to perform any validation on the body.
+///
+/// # Errors
+///
+/// The function returns an `Error` in cases such as:
+/// - Failure to parse the WebSocket upgrade request.
+/// - Issues building the response, such as invalid subprotocol or extension headers.
+/// - Failure to negotiate the WebSocket extensions or subprotocols.
+pub fn handshake_from_parts<E, B>(
+    version: Version,
+    method: &Method,
+    headers: &HeaderMap,
+    extension: &E,
+    subprotocols: &SubprotocolRegistry,
+) -> Result<(Response<()>, Option<E::Extension>), Error>
+where
+    E: ExtensionProvider,
+{
+    let UpgradeRequestParts {
+        key,
+        subprotocol,
+        extension,
+        extension_header,
+        ..
+    } = parse_request(version, method, headers, extension, subprotocols)?;
+
+    let mut response = http::Response::builder()
+        .version(Version::HTTP_11)
+        .status(StatusCode::SWITCHING_PROTOCOLS)
+        .body(())?;
+    *response.headers_mut() = build_response_headers(key, subprotocol, extension_header)?;
+
+    Ok((response, extension))
+}
+
+/// Constructs the HTTP response headers for a WebSocket handshake response.
+///
+/// This function builds the necessary headers for completing a WebSocket handshake, including
+/// the `Sec-WebSocket-Accept` header, which is derived by hashing the client's WebSocket key
+/// and appending the WebSocket GUID. Additionally, it adds optional headers for subprotocols and
+/// extensions if they were negotiated during the handshake.
+///
+/// # Arguments
+/// - `key`: The WebSocket key provided by the client as part of the handshake request (`Sec-WebSocket-Key`).
+/// - `subprotocol`: An optional `String` that represents the WebSocket subprotocol negotiated between
+///   the client and server. If provided, it will be included in the `Sec-WebSocket-Protocol` header.
+/// - `extension_header`: An optional `HeaderValue` representing any WebSocket extensions negotiated
+///   during the handshake. If provided, it will be added to the `Sec-WebSocket-Extensions` header.
+///
+/// # Returns
+/// - `Result<HeaderMap, Error>`: A result that contains either a `HeaderMap` with the constructed
+///  headers or an `Error` if an issue occurs while creating the headers.
+pub fn build_response_headers(
+    key: Bytes,
+    subprotocol: Option<String>,
+    extension_header: Option<HeaderValue>,
+) -> Result<HeaderMap, Error> {
+    let mut digest = Sha1::new();
+    Digest::update(&mut digest, key);
+    Digest::update(&mut digest, ACCEPT_KEY);
+
+    let sec_websocket_accept = STANDARD.encode(digest.finalize());
+
+    let mut map = HeaderMap::default();
+
+    map.insert(
+        http::header::SEC_WEBSOCKET_ACCEPT,
+        HeaderValue::try_from(sec_websocket_accept)?,
+    );
+    map.insert(
+        http::header::UPGRADE,
+        HeaderValue::from_static(WEBSOCKET_STR),
+    );
+    map.insert(
+        http::header::CONNECTION,
+        HeaderValue::from_static(UPGRADE_STR),
+    );
+    if let Some(subprotocol) = subprotocol {
+        map.insert(
+            http::header::SEC_WEBSOCKET_PROTOCOL,
+            HeaderValue::try_from(subprotocol)?,
+        );
+    }
+    if let Some(extension_header) = extension_header {
+        map.insert(http::header::SEC_WEBSOCKET_EXTENSIONS, extension_header);
+    }
+
+    Ok(map)
 }
