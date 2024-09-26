@@ -168,9 +168,9 @@ impl Role {
 
 #[derive(Debug, Copy, Clone, Display, PartialEq, Eq)]
 pub enum OpCode {
-    #[display(fmt = "{}", _0)]
+    #[display("{}", _0)]
     DataCode(DataCode),
-    #[display(fmt = "{}", _0)]
+    #[display("{}", _0)]
     ControlCode(ControlCode),
 }
 
