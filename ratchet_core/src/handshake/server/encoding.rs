@@ -15,14 +15,16 @@
 use crate::handshake::io::BufferedIo;
 use crate::handshake::server::HandshakeResult;
 use crate::handshake::{
-    get_header, validate_header, validate_header_any, validate_header_value, ParseResult,
-    METHOD_GET, UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
+    get_header, validate_header_any, validate_header_value, ParseResult, METHOD_GET, UPGRADE_STR,
+    WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
 };
 use crate::handshake::{negotiate_request, TryMap};
 use crate::{Error, ErrorKind, HttpError, ProtocolRegistry};
 use bytes::{BufMut, BytesMut};
-use http::{HeaderMap, StatusCode};
-use httparse::Status;
+use http::header::HOST;
+use http::{HeaderMap, StatusCode, Version};
+use httparse::{Header, Status};
+use log::error;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
 use tokio_util::codec::Decoder;
@@ -144,10 +146,10 @@ where
 pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
     match request.version {
         Some(HTTP_VERSION_INT) | None => {}
-        Some(v) => {
+        Some(_) => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::HttpVersion(Some(v)),
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
             ))
         }
     }
@@ -176,10 +178,10 @@ where
 {
     match request.version {
         Some(HTTP_VERSION_INT) => {}
-        v => {
+        _ => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::HttpVersion(v),
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
             ))
         }
     }
@@ -203,7 +205,10 @@ where
         WEBSOCKET_VERSION_STR,
     )?;
 
-    validate_header(headers, http::header::HOST, |_, _| Ok(()))?;
+    if let Err(e) = validate_host_header(headers) {
+        error!("Server responded with invalid 'host' headers");
+        return Err(e);
+    }
 
     let key = get_header(headers, http::header::SEC_WEBSOCKET_KEY)?;
     let subprotocol = negotiate_request(subprotocols, request)?;
@@ -219,4 +224,26 @@ where
         subprotocol,
         extension_header,
     })
+}
+
+/// Validates that 'headers' contains one 'host' header and that it is not a seperated list.
+fn validate_host_header(headers: &[Header]) -> Result<(), Error> {
+    let len = headers
+        .iter()
+        .filter_map(|header| {
+            if header.name.eq_ignore_ascii_case(HOST.as_str()) {
+                Some(header.value.split(|c| c == &b' ' || c == &b','))
+            } else {
+                None
+            }
+        })
+        .count();
+    if len == 1 {
+        Ok(())
+    } else {
+        Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::MissingHeader(HOST),
+        ))
+    }
 }

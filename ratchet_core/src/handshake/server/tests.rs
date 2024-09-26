@@ -33,7 +33,10 @@ impl From<ReadError<httparse::Error>> for Error {
     }
 }
 
-async fn exec_request(request: Request<()>) -> Result<Response<()>, Error> {
+async fn exec_request<F>(request: Request<()>, f: F) -> Result<Response<()>, Error>
+where
+    F: FnOnce(HeaderMap),
+{
     let (mut client, server) = mock();
 
     client.write_request(request).await?;
@@ -46,13 +49,15 @@ async fn exec_request(request: Request<()>) -> Result<Response<()>, Error> {
     )
     .await?;
 
+    f(upgrader.request.headers().clone());
+
     let _upgraded = upgrader.upgrade().await?;
     client.read_response().await.map_err(Into::into)
 }
 
 #[tokio::test]
 async fn valid_response() {
-    let response = exec_request(valid_request()).await.unwrap();
+    let response = exec_request(valid_request(), |_| {}).await.unwrap();
 
     let expected = Response::builder()
         .status(101)
@@ -72,7 +77,7 @@ async fn valid_response() {
 #[tokio::test]
 async fn bad_request() {
     async fn t(request: Request<()>, name: HeaderName) {
-        match exec_request(request).await {
+        match exec_request(request, |_| {}).await {
             Ok(o) => panic!("Expected a test failure. Got: {:?}", o),
             Err(e) => match e.downcast_ref::<HttpError>() {
                 Some(err) => {
@@ -85,7 +90,6 @@ async fn bad_request() {
         }
     }
 
-    // request doesn't implement clone
     t(
         Request::builder()
             .uri("/test")
@@ -158,11 +162,14 @@ async fn bad_request() {
         .body(())
         .unwrap();
 
-    match exec_request(request).await {
+    match exec_request(request, |_| {}).await {
         Ok(o) => panic!("Expected a test failure. Got: {:?}", o),
         Err(e) => match e.downcast_ref::<HttpError>() {
             Some(err) => {
-                assert_eq!(err, &HttpError::HttpVersion(Some(0)));
+                assert_eq!(
+                    err,
+                    &HttpError::HttpVersion(format!("{:?}", Version::HTTP_10))
+                );
             }
             None => {
                 panic!("Expected a HTTP error. Got: {:?}", e)
@@ -181,7 +188,7 @@ async fn bad_request() {
         .body(())
         .unwrap();
 
-    match exec_request(request).await {
+    match exec_request(request, |_| {}).await {
         Ok(o) => panic!("Expected a test failure. Got: {:?}", o),
         Err(e) => match e.downcast_ref::<HttpError>() {
             Some(err) => {
@@ -332,7 +339,7 @@ async fn multiple_connection_headers() {
         .body(())
         .unwrap();
 
-    let response = exec_request(request).await.unwrap();
+    let response = exec_request(request, |_| {}).await.unwrap();
 
     let expected = Response::builder()
         .status(101)
@@ -347,4 +354,28 @@ async fn multiple_connection_headers() {
         .unwrap();
 
     assert_response_eq(response, expected);
+}
+
+#[tokio::test]
+async fn user_defined_headers() {
+    let mut req = valid_request();
+    req.headers_mut()
+        .insert(http::header::ACCEPT_RANGES, "aaaaa".parse().unwrap());
+    req.headers_mut().insert(
+        http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+        "bbbbbb".parse().unwrap(),
+    );
+
+    exec_request(req, |headers| {
+        assert_eq!(
+            headers.get(http::header::ACCEPT_RANGES),
+            Some(&HeaderValue::from_static("aaaaa"))
+        );
+        assert_eq!(
+            headers.get(http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS),
+            Some(&HeaderValue::from_static("bbbbbb"))
+        );
+    })
+    .await
+    .unwrap();
 }
