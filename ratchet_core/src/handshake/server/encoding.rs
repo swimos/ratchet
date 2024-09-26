@@ -194,6 +194,28 @@ pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
     Ok(())
 }
 
+/// Validates that `version` and `method` are correct for a WebSocket upgrade.
+///
+/// # Returns
+/// `Ok(())` if they are correct or `Err(e)` if they are not.
+pub fn validate_method_and_version(version: Version, method: &Method) -> Result<(), Error> {
+    if version < HTTP_VERSION {
+        return Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+        ));
+    }
+
+    if method != Method::GET {
+        return Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::HttpMethod(Some(method.to_string())),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Parses an HTTP request to extract WebSocket upgrade information.
 ///
 /// This function validates and processes an incoming HTTP request to ensure it meets the
@@ -231,20 +253,7 @@ pub fn parse_request<E>(
 where
     E: ExtensionProvider,
 {
-    if version < HTTP_VERSION {
-        return Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-        ));
-    }
-
-    if method != Method::GET {
-        return Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::HttpMethod(Some(method.to_string())),
-        ));
-    }
-
+    validate_method_and_version(version, method)?;
     validate_header_any(headers, http::header::CONNECTION, UPGRADE_STR)?;
     validate_header_value(headers, http::header::UPGRADE, WEBSOCKET_STR)?;
     validate_header_value(

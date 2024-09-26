@@ -16,7 +16,7 @@ mod encoding;
 #[cfg(test)]
 mod tests;
 
-pub use encoding::parse_request;
+pub use encoding::{parse_request, validate_method_and_version};
 
 use crate::{
     ext::NoExt,
@@ -410,7 +410,7 @@ pub struct UpgradeRequest<E, B = ()> {
 ///   the WebSocket protocol.
 /// - `Connection`: Set to `Upgrade`, as required by the HTTP upgrade process.
 ///
-/// Optionally, the response may also include:
+/// Optionally, the response headers may also include:
 ///
 /// - `Sec-WebSocket-Protocol`: The negotiated subprotocol, if provided.
 /// - `Sec-WebSocket-Extensions`: The WebSocket extension header, if an extension was negotiated.
@@ -425,7 +425,7 @@ pub fn build_response(
     key: Bytes,
     subprotocol: Option<String>,
     extension_header: Option<HeaderValue>,
-) -> Result<http::Response<()>, Error> {
+) -> Result<Response<()>, Error> {
     let mut response = http::Response::builder()
         .version(Version::HTTP_11)
         .status(StatusCode::SWITCHING_PROTOCOLS);
@@ -507,16 +507,10 @@ where
     ))
 }
 
-/// Processes a WebSocket handshake request from its parts and generates the appropriate response.
-///
-/// This function handles the server-side part of a WebSocket handshake. It parses the incoming HTTP
-/// request parts that seeks to upgrade the connection to WebSocket, negotiates extensions and
-/// subprotocols, and constructs an appropriate HTTP response to complete the WebSocket handshake.
+/// Generates a WebSocket upgrade response from the provided headers.
 ///
 /// # Arguments
 ///
-/// - `version`: The HTTP `Version` of the request.
-/// - `method`: The HTTP `Method` of the request, which must be `GET` for WebSocket handshakes.
 /// - `headers`: A reference to the request's `HeaderMap` containing the HTTP headers. These headers
 ///  must include the necessary WebSocket headers such as `Sec-WebSocket-Key` and `Upgrade`.
 /// - `extension`: An extension that may be negotiated for the connection.
@@ -539,10 +533,6 @@ where
 ///
 /// - `E`: The type of the extension provider, which must implement the `ExtensionProvider`
 ///   trait. This defines how WebSocket extensions (like compression) are handled.
-/// - `B`: The body type of the HTTP request. While it is discouraged for GET requests to have a body
-///  it is not technically incorrect and the use of this function is lowering the guardrails to
-///  allow for Ratchet to be more easily integrated into other libraries. It is the implementors
-///  responsibility to perform any validation on the body.
 ///
 /// # Errors
 ///
@@ -550,11 +540,9 @@ where
 /// - Failure to parse the WebSocket upgrade request.
 /// - Issues building the response, such as invalid subprotocol or extension headers.
 /// - Failure to negotiate the WebSocket extensions or subprotocols.
-pub fn handshake_from_parts<E, B>(
-    version: Version,
-    method: &Method,
+pub fn response_from_headers<E>(
     headers: &HeaderMap,
-    extension: &E,
+    extension: E,
     subprotocols: &SubprotocolRegistry,
 ) -> Result<(Response<()>, Option<E::Extension>), Error>
 where
@@ -565,8 +553,13 @@ where
         subprotocol,
         extension,
         extension_header,
-        ..
-    } = parse_request(version, method, headers, extension, subprotocols)?;
+    } = parse_request(
+        Version::HTTP_11,
+        &Method::GET,
+        headers,
+        extension,
+        subprotocols,
+    )?;
 
     let mut response = http::Response::builder()
         .version(Version::HTTP_11)
