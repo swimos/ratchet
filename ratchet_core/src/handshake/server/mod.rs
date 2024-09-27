@@ -16,8 +16,9 @@ mod encoding;
 #[cfg(test)]
 mod tests;
 
-pub use encoding::{parse_request, validate_method_and_version};
-
+use crate::handshake::{
+    validate_header_any, validate_header_value, METHOD_GET, WEBSOCKET_VERSION_STR,
+};
 use crate::{
     ext::NoExt,
     handshake::io::BufferedIo,
@@ -25,11 +26,12 @@ use crate::{
     handshake::{StreamingParser, ACCEPT_KEY},
     handshake::{UPGRADE_STR, WEBSOCKET_STR},
     protocol::Role,
-    Error, HttpError, NoExtProvider, Request, SubprotocolRegistry, WebSocket, WebSocketConfig,
-    WebSocketStream,
+    Error, ErrorKind, HttpError, NoExtProvider, Request, SubprotocolRegistry, WebSocket,
+    WebSocketConfig, WebSocketStream,
 };
 use base64::engine::{general_purpose::STANDARD, Engine};
 use bytes::{Bytes, BytesMut};
+use http::header::{HOST, SEC_WEBSOCKET_KEY};
 use http::request::Parts;
 use http::status::InvalidStatusCode;
 use http::{HeaderMap, HeaderValue, Method, Response, StatusCode, Uri, Version};
@@ -43,6 +45,7 @@ const MSG_HANDSHAKE_COMPLETED: &str = "Server handshake completed";
 const MSG_HANDSHAKE_FAILED: &str = "Server handshake failed";
 const UPGRADED_MSG: &str = "Upgraded connection";
 const REJECT_MSG: &str = "Rejected connection";
+const HTTP_VERSION_INT: u8 = 1;
 
 /// A structure representing an upgraded WebSocket session and an optional subprotocol that was
 /// negotiated during the upgrade.
@@ -389,7 +392,7 @@ pub struct UpgradeRequest<E, B = ()> {
 /// Builds an HTTP response to a WebSocket connection upgrade request.
 ///
 /// No validation is performed by this function and it is only guaranteed to be correct if the
-/// arguments are derived by previously calling [`parse_request`].
+/// arguments are derived by previously calling [`parse_request_parts`].
 ///
 /// # Arguments
 ///
@@ -500,7 +503,7 @@ where
         extension,
         extension_header,
         ..
-    } = parse_request(version, &method, &headers, extension, subprotocols)?;
+    } = parse_request_parts(version, &method, &headers, extension, subprotocols)?;
     Ok((
         build_response(key, subprotocol, extension_header)?,
         extension,
@@ -553,7 +556,7 @@ where
         subprotocol,
         extension,
         extension_header,
-    } = parse_request(
+    } = parse_request_parts(
         Version::HTTP_11,
         &Method::GET,
         headers,
@@ -623,4 +626,144 @@ pub fn build_response_headers(
     }
 
     Ok(map)
+}
+
+/// Parses an HTTP request from its parts to extract WebSocket upgrade information.
+///
+/// This function validates and processes an incoming HTTP request to ensure it meets the
+/// requirements for a WebSocket upgrade. It checks the HTTP version, method, and necessary headers
+/// to determine if the request can be successfully upgraded to a WebSocket connection. It also
+/// negotiates the subprotocols and extensions specified in the request.
+///
+/// # Arguments
+/// - `request`: An `http::Request<B>` representing the incoming HTTP request from the client, which
+/// is expected to contain WebSocket-specific headers. While it is discouraged for GET requests to
+/// have a body it is not technically incorrect and the use of this function is lowering the
+/// guardrails to allow for Ratchet to be more easily integrated into other libraries. It is the
+/// implementors responsibility to perform any validation on the body.
+/// - `extension`: An instance of a type that implements the `ExtensionProvider`
+/// trait. This object is responsible for negotiating any server-supported
+/// extensions requested by the client.
+/// - `subprotocols`: A `SubprotocolRegistry`, which manages the supported subprotocols and attempts
+/// to negotiate one with the client.
+///
+/// # Returns
+/// This function returns a `Result<UpgradeRequest<E::Extension, B>, Error>`, where:
+/// - `Ok(UpgradeRequest)`: Contains the parsed information needed for the WebSocket
+///   handshake, including the WebSocket key, negotiated subprotocol, optional
+///   extensions, and the original HTTP request.
+/// - `Err(Error)`: Contains an error if the request is invalid or cannot be parsed.
+///   This could include issues such as unsupported HTTP versions, invalid methods,
+///   missing required headers, or failed negotiations for subprotocols or extensions.
+pub fn parse_request_parts<E>(
+    version: Version,
+    method: &Method,
+    headers: &HeaderMap,
+    extension: E,
+    subprotocols: &SubprotocolRegistry,
+) -> Result<UpgradeRequestParts<E::Extension>, Error>
+where
+    E: ExtensionProvider,
+{
+    validate_method_and_version(version, method)?;
+    validate_header_any(headers, http::header::CONNECTION, UPGRADE_STR)?;
+    validate_header_value(headers, http::header::UPGRADE, WEBSOCKET_STR)?;
+    validate_header_value(
+        headers,
+        http::header::SEC_WEBSOCKET_VERSION,
+        WEBSOCKET_VERSION_STR,
+    )?;
+
+    if let Err(e) = validate_host_header(headers) {
+        error!("Server responded with invalid 'host' headers");
+        return Err(e);
+    }
+
+    let key = headers
+        .get(SEC_WEBSOCKET_KEY)
+        .map(|v| Bytes::from(v.as_bytes().to_vec()))
+        .ok_or_else(|| {
+            Error::with_cause(ErrorKind::Http, HttpError::MissingHeader(SEC_WEBSOCKET_KEY))
+        })?;
+    let subprotocol = subprotocols.negotiate_client(headers)?;
+    let (extension, extension_header) = extension
+        .negotiate_server(headers)
+        .map(Option::unzip)
+        .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?;
+
+    Ok(UpgradeRequestParts {
+        key,
+        extension,
+        subprotocol,
+        extension_header,
+    })
+}
+
+fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
+    match request.version {
+        Some(HTTP_VERSION_INT) | None => {}
+        Some(_) => {
+            return Err(Error::with_cause(
+                ErrorKind::Http,
+                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+            ))
+        }
+    }
+
+    match request.method {
+        Some(m) if m.eq_ignore_ascii_case(METHOD_GET) => {}
+        None => {}
+        m => {
+            return Err(Error::with_cause(
+                ErrorKind::Http,
+                HttpError::HttpMethod(m.map(ToString::to_string)),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates that `version` and `method` are correct for a WebSocket upgrade.
+///
+/// # Returns
+/// `Ok(())` if they are correct or `Err(e)` if they are not.
+pub fn validate_method_and_version(version: Version, method: &Method) -> Result<(), Error> {
+    if version < Version::HTTP_11 {
+        return Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+        ));
+    }
+
+    if method != Method::GET {
+        return Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::HttpMethod(Some(method.to_string())),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validates that 'headers' contains one 'host' header and that it is not a seperated list.
+fn validate_host_header(headers: &HeaderMap) -> Result<(), Error> {
+    let len = headers
+        .iter()
+        .filter_map(|(name, value)| {
+            if name.as_str().eq_ignore_ascii_case(HOST.as_str()) {
+                Some(value.as_bytes().split(|c| c == &b' ' || c == &b','))
+            } else {
+                None
+            }
+        })
+        .count();
+    if len == 1 {
+        Ok(())
+    } else {
+        Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::MissingHeader(HOST),
+        ))
+    }
 }

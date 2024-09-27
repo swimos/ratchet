@@ -13,18 +13,14 @@
 // limitations under the License.
 
 use crate::handshake::io::BufferedIo;
-use crate::handshake::server::{UpgradeRequest, UpgradeRequestParts};
-use crate::handshake::{
-    validate_header_any, validate_header_value, ParseResult, TryFromWrapper, METHOD_GET,
-    UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
-};
-use crate::{Error, ErrorKind, HttpError, SubprotocolRegistry};
-use bytes::{BufMut, Bytes, BytesMut};
-use http::header::{HOST, SEC_WEBSOCKET_KEY};
+use crate::handshake::server::{check_partial_request, UpgradeRequest, UpgradeRequestParts};
+use crate::handshake::{ParseResult, TryFromWrapper};
+use crate::server::parse_request_parts;
+use crate::{Error, SubprotocolRegistry};
+use bytes::{BufMut, BytesMut};
 use http::request::Parts;
-use http::{HeaderMap, Method, Request, StatusCode, Version};
+use http::{HeaderMap, Request, StatusCode};
 use httparse::Status;
-use log::error;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
 use tokio_util::codec::Decoder;
@@ -35,8 +31,6 @@ const HTTP_VERSION_STR: &[u8] = b"HTTP/1.1 ";
 const STATUS_TERMINATOR_LEN: usize = 2;
 const TERMINATOR_NO_HEADERS: &[u8] = b"\r\n\r\n";
 const TERMINATOR_WITH_HEADER: &[u8] = b"\r\n";
-const HTTP_VERSION_INT: u8 = 1;
-const HTTP_VERSION: Version = Version::HTTP_11;
 
 pub struct RequestParser<E> {
     pub subprotocols: SubprotocolRegistry,
@@ -151,7 +145,7 @@ where
                 subprotocol,
                 extension,
                 extension_header,
-            } = parse_request(*version, method, headers, extension, subprotocols)?;
+            } = parse_request_parts(*version, method, headers, extension, subprotocols)?;
 
             Ok(ParseResult::Complete(
                 UpgradeRequest {
@@ -166,145 +160,5 @@ where
         }
         Ok(Status::Partial) => Ok(ParseResult::Partial(request)),
         Err(e) => Err(e.into()),
-    }
-}
-
-pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
-    match request.version {
-        Some(HTTP_VERSION_INT) | None => {}
-        Some(_) => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-            ))
-        }
-    }
-
-    match request.method {
-        Some(m) if m.eq_ignore_ascii_case(METHOD_GET) => {}
-        None => {}
-        m => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpMethod(m.map(ToString::to_string)),
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-/// Validates that `version` and `method` are correct for a WebSocket upgrade.
-///
-/// # Returns
-/// `Ok(())` if they are correct or `Err(e)` if they are not.
-pub fn validate_method_and_version(version: Version, method: &Method) -> Result<(), Error> {
-    if version < HTTP_VERSION {
-        return Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-        ));
-    }
-
-    if method != Method::GET {
-        return Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::HttpMethod(Some(method.to_string())),
-        ));
-    }
-
-    Ok(())
-}
-
-/// Parses an HTTP request to extract WebSocket upgrade information.
-///
-/// This function validates and processes an incoming HTTP request to ensure it meets the
-/// requirements for a WebSocket upgrade. It checks the HTTP version, method, and necessary headers
-/// to determine if the request can be successfully upgraded to a WebSocket connection. It also
-/// negotiates the subprotocols and extensions specified in the request.
-///
-/// # Arguments
-/// - `request`: An `http::Request<B>` representing the incoming HTTP request from the client, which
-/// is expected to contain WebSocket-specific headers. While it is discouraged for GET requests to
-/// have a body it is not technically incorrect and the use of this function is lowering the
-/// guardrails to allow for Ratchet to be more easily integrated into other libraries. It is the
-/// implementors responsibility to perform any validation on the body.
-/// - `extension`: An instance of a type that implements the `ExtensionProvider`
-/// trait. This object is responsible for negotiating any server-supported
-/// extensions requested by the client.
-/// - `subprotocols`: A `SubprotocolRegistry`, which manages the supported subprotocols and attempts
-/// to negotiate one with the client.
-///
-/// # Returns
-/// This function returns a `Result<UpgradeRequest<E::Extension, B>, Error>`, where:
-/// - `Ok(UpgradeRequest)`: Contains the parsed information needed for the WebSocket
-///   handshake, including the WebSocket key, negotiated subprotocol, optional
-///   extensions, and the original HTTP request.
-/// - `Err(Error)`: Contains an error if the request is invalid or cannot be parsed.
-///   This could include issues such as unsupported HTTP versions, invalid methods,
-///   missing required headers, or failed negotiations for subprotocols or extensions.
-pub fn parse_request<E>(
-    version: Version,
-    method: &Method,
-    headers: &HeaderMap,
-    extension: E,
-    subprotocols: &SubprotocolRegistry,
-) -> Result<UpgradeRequestParts<E::Extension>, Error>
-where
-    E: ExtensionProvider,
-{
-    validate_method_and_version(version, method)?;
-    validate_header_any(headers, http::header::CONNECTION, UPGRADE_STR)?;
-    validate_header_value(headers, http::header::UPGRADE, WEBSOCKET_STR)?;
-    validate_header_value(
-        headers,
-        http::header::SEC_WEBSOCKET_VERSION,
-        WEBSOCKET_VERSION_STR,
-    )?;
-
-    if let Err(e) = validate_host_header(headers) {
-        error!("Server responded with invalid 'host' headers");
-        return Err(e);
-    }
-
-    let key = headers
-        .get(SEC_WEBSOCKET_KEY)
-        .map(|v| Bytes::from(v.as_bytes().to_vec()))
-        .ok_or_else(|| {
-            Error::with_cause(ErrorKind::Http, HttpError::MissingHeader(SEC_WEBSOCKET_KEY))
-        })?;
-    let subprotocol = subprotocols.negotiate_client(headers)?;
-    let (extension, extension_header) = extension
-        .negotiate_server(headers)
-        .map(Option::unzip)
-        .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?;
-
-    Ok(UpgradeRequestParts {
-        key,
-        extension,
-        subprotocol,
-        extension_header,
-    })
-}
-
-/// Validates that 'headers' contains one 'host' header and that it is not a seperated list.
-fn validate_host_header(headers: &HeaderMap) -> Result<(), Error> {
-    let len = headers
-        .iter()
-        .filter_map(|(name, value)| {
-            if name.as_str().eq_ignore_ascii_case(HOST.as_str()) {
-                Some(value.as_bytes().split(|c| c == &b' ' || c == &b','))
-            } else {
-                None
-            }
-        })
-        .count();
-    if len == 1 {
-        Ok(())
-    } else {
-        Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::MissingHeader(HOST),
-        ))
     }
 }

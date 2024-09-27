@@ -79,7 +79,7 @@ impl<S> WebSocketStream for S where S: AsyncRead + AsyncWrite + Send + Unpin + '
 /// It should generally not be required unless integrating Ratchet into other libraries.
 pub mod server {
     pub use crate::handshake::{
-        build_response, build_response_headers, handshake, parse_request, response_from_headers,
-        validate_method_and_version, UpgradeRequest, UpgradeRequestParts,
+        build_response, build_response_headers, handshake, parse_request_parts,
+        response_from_headers, validate_method_and_version, UpgradeRequest, UpgradeRequestParts,
     };
 }
