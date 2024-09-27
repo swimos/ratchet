@@ -14,10 +14,9 @@
 
 use crate::errors::Error;
 use crate::ext::NoExtProvider;
-use crate::handshake::{ProtocolRegistry, UpgradedServer};
+use crate::handshake::{SubprotocolRegistry, UpgradedServer};
 use crate::{subscribe_with, TryIntoRequest, UpgradedClient, WebSocketConfig, WebSocketStream};
 use ratchet_ext::ExtensionProvider;
-use std::borrow::Cow;
 
 /// A builder to construct WebSocket clients.
 ///
@@ -28,7 +27,7 @@ use std::borrow::Cow;
 pub struct WebSocketClientBuilder<E> {
     config: Option<WebSocketConfig>,
     extension: E,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
 }
 
 impl Default for WebSocketClientBuilder<NoExtProvider> {
@@ -36,7 +35,7 @@ impl Default for WebSocketClientBuilder<NoExtProvider> {
         WebSocketClientBuilder {
             config: None,
             extension: NoExtProvider,
-            subprotocols: ProtocolRegistry::default(),
+            subprotocols: SubprotocolRegistry::default(),
         }
     }
 }
@@ -95,9 +94,9 @@ impl<E> WebSocketClientBuilder<E> {
     pub fn subprotocols<I>(mut self, subprotocols: I) -> Result<Self, Error>
     where
         I: IntoIterator,
-        I::Item: Into<Cow<'static, str>>,
+        I::Item: Into<String>,
     {
-        self.subprotocols = ProtocolRegistry::new(subprotocols)?;
+        self.subprotocols = SubprotocolRegistry::new(subprotocols)?;
         Ok(self)
     }
 }
@@ -110,7 +109,7 @@ impl<E> WebSocketClientBuilder<E> {
 #[derive(Debug)]
 pub struct WebSocketServerBuilder<E> {
     config: Option<WebSocketConfig>,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
     extension: E,
 }
 
@@ -119,7 +118,7 @@ impl Default for WebSocketServerBuilder<NoExtProvider> {
         WebSocketServerBuilder {
             config: None,
             extension: NoExtProvider,
-            subprotocols: ProtocolRegistry::default(),
+            subprotocols: SubprotocolRegistry::default(),
         }
     }
 }
@@ -168,9 +167,9 @@ impl<E> WebSocketServerBuilder<E> {
     pub fn subprotocols<I>(mut self, subprotocols: I) -> Result<Self, Error>
     where
         I: IntoIterator,
-        I::Item: Into<Cow<'static, str>>,
+        I::Item: Into<String>,
     {
-        self.subprotocols = ProtocolRegistry::new(subprotocols)?;
+        self.subprotocols = SubprotocolRegistry::new(subprotocols)?;
         Ok(self)
     }
 }

@@ -12,95 +12,75 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::handshake::{negotiate_request, ProtocolRegistry};
+use crate::handshake::SubprotocolRegistry;
 use crate::ProtocolError;
 use http::header::SEC_WEBSOCKET_PROTOCOL;
+use http::{HeaderMap, HeaderValue};
 
 #[test]
 fn selects_protocol_ok() {
-    let mut headers = [httparse::Header {
-        name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-        value: b"warp, warps",
-    }];
-    let request = httparse::Request::new(&mut headers);
-
-    let registry = ProtocolRegistry::new(vec!["warps", "warp"]).unwrap();
+    let headers = HeaderMap::from_iter([(
+        SEC_WEBSOCKET_PROTOCOL,
+        HeaderValue::from_static("warp, warps"),
+    )]);
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp"]).unwrap();
 
     assert_eq!(
-        negotiate_request(&registry, &request),
+        registry.negotiate_client(&headers),
         Ok(Some("warp".to_string()))
     );
 }
 
 #[test]
 fn multiple_headers() {
-    let mut headers = [
-        httparse::Header {
-            name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-            value: b"warp",
-        },
-        httparse::Header {
-            name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-            value: b"warps",
-        },
-    ];
-    let request = httparse::Request::new(&mut headers);
+    let headers = HeaderMap::from_iter([
+        (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warp")),
+        (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warps")),
+    ]);
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp"]).unwrap();
 
-    let registry = ProtocolRegistry::new(vec!["warps", "warp"]).unwrap();
     assert_eq!(
-        negotiate_request(&registry, &request),
+        registry.negotiate_client(&headers),
         Ok(Some("warp".to_string()))
     );
 }
 
 #[test]
 fn mixed_headers() {
-    let mut headers = [
-        httparse::Header {
-            name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-            value: b"warp1.0",
-        },
-        httparse::Header {
-            name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-            value: b"warps2.0,warp3.0",
-        },
-        httparse::Header {
-            name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-            value: b"warps4.0",
-        },
-    ];
-    let request = httparse::Request::new(&mut headers);
+    let headers = HeaderMap::from_iter([
+        (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warp1.0")),
+        (
+            SEC_WEBSOCKET_PROTOCOL,
+            HeaderValue::from_static("warps2.0,warp3.0"),
+        ),
+        (SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("warps4.0")),
+    ]);
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
 
-    let registry = ProtocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
     assert_eq!(
-        negotiate_request(&registry, &request),
+        registry.negotiate_client(&headers),
         Ok(Some("warps2.0".to_string()))
     );
 }
 
 #[test]
 fn malformatted() {
-    let mut headers = [httparse::Header {
-        name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-        value: &[255, 255, 255, 255],
-    }];
-    let request = httparse::Request::new(&mut headers);
+    let headers = HeaderMap::from_iter([(SEC_WEBSOCKET_PROTOCOL, unsafe {
+        HeaderValue::from_maybe_shared_unchecked([255, 255, 255, 255])
+    })]);
+    let registry = SubprotocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
 
-    let registry = ProtocolRegistry::new(vec!["warps", "warp", "warps2.0"]).unwrap();
     assert_eq!(
-        negotiate_request(&registry, &request),
+        registry.negotiate_client(&headers),
         Err(ProtocolError::Encoding)
     );
 }
 
 #[test]
 fn no_match() {
-    let mut headers = [httparse::Header {
-        name: SEC_WEBSOCKET_PROTOCOL.as_str(),
-        value: b"a,b,c",
-    }];
-    let request = httparse::Request::new(&mut headers);
+    let headers =
+        HeaderMap::from_iter([(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static("a,b,c"))]);
+    let registry = SubprotocolRegistry::new(vec!["d"]).unwrap();
 
-    let registry = ProtocolRegistry::new(vec!["d"]).unwrap();
-    assert_eq!(negotiate_request(&registry, &request), Ok(None));
+    assert_eq!(registry.negotiate_client(&headers), Ok(None));
 }

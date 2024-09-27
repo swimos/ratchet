@@ -15,12 +15,11 @@
 use crate::handshake::{UPGRADE_STR, WEBSOCKET_STR, WEBSOCKET_VERSION_STR};
 use crate::test_fixture::{mock, ReadError};
 use crate::{
-    accept_with, Error, ErrorKind, HttpError, NoExtProvider, ProtocolRegistry, WebSocketConfig,
+    accept_with, Error, ErrorKind, HttpError, NoExtProvider, SubprotocolRegistry, WebSocketConfig,
 };
 use bytes::BytesMut;
 use http::header::HeaderName;
-use http::{HeaderMap, HeaderValue, Request, Response, Version};
-use httparse::Header;
+use http::{HeaderMap, HeaderValue, Method, Request, Response, Version};
 use ratchet_ext::{
     Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader,
     ReunitableExtension, RsvBits, SplittableExtension,
@@ -45,7 +44,7 @@ where
         server,
         WebSocketConfig::default(),
         NoExtProvider,
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
     )
     .await?;
 
@@ -179,7 +178,7 @@ async fn bad_request() {
 
     let request = Request::builder()
         .uri("/test")
-        .method("post")
+        .method(Method::POST)
         .header(http::header::CONNECTION, UPGRADE_STR)
         .header(http::header::UPGRADE, WEBSOCKET_STR)
         .header(http::header::SEC_WEBSOCKET_VERSION, WEBSOCKET_VERSION_STR)
@@ -192,7 +191,7 @@ async fn bad_request() {
         Ok(o) => panic!("Expected a test failure. Got: {:?}", o),
         Err(e) => match e.downcast_ref::<HttpError>() {
             Some(err) => {
-                assert_eq!(err, &HttpError::HttpMethod(Some("post".to_string())));
+                assert_eq!(err, &HttpError::HttpMethod(Some("POST".to_string())));
             }
             None => {
                 panic!("Expected a HTTP error. Got: {:?}", e)
@@ -225,14 +224,14 @@ impl ExtensionProvider for BadExtProvider {
 
     fn negotiate_client(
         &self,
-        _headers: &[Header],
+        _headers: &HeaderMap,
     ) -> Result<Option<Self::Extension>, Self::Error> {
-        panic!("Unexpected client negotitation request")
+        panic!("Unexpected client negotiation request")
     }
 
     fn negotiate_server(
         &self,
-        _headers: &[Header],
+        _headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error> {
         Err(ExtErr)
     }
@@ -311,7 +310,7 @@ async fn bad_extension() {
         server,
         WebSocketConfig::default(),
         BadExtProvider,
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
     )
     .await;
 

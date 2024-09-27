@@ -15,7 +15,7 @@
 use bytes::BytesMut;
 use ratchet_deflate::{Deflate, DeflateExtProvider};
 use ratchet_rs::UpgradedClient;
-use ratchet_rs::{Error, Message, PayloadType, ProtocolRegistry, WebSocketConfig};
+use ratchet_rs::{Error, Message, PayloadType, SubprotocolRegistry, WebSocketConfig};
 use tokio::io::{BufReader, BufWriter};
 use tokio::net::TcpStream;
 
@@ -32,7 +32,7 @@ async fn subscribe(
         BufReader::new(BufWriter::new(stream)),
         url,
         &DeflateExtProvider::default(),
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
     )
     .await
 }

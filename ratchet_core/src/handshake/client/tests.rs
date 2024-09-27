@@ -16,7 +16,7 @@ use crate::errors::{Error, HttpError};
 use crate::ext::NoExt;
 use crate::handshake::client::encoding::build_request;
 use crate::handshake::client::{ClientHandshake, HandshakeResult};
-use crate::handshake::{ProtocolRegistry, ACCEPT_KEY, UPGRADE_STR, WEBSOCKET_STR};
+use crate::handshake::{SubprotocolRegistry, ACCEPT_KEY, UPGRADE_STR, WEBSOCKET_STR};
 use crate::test_fixture::mock;
 use crate::{ErrorKind, NoExtProvider, ProtocolError, TryIntoRequest};
 use base64::engine::{general_purpose::STANDARD, Engine};
@@ -49,7 +49,7 @@ async fn handshake_sends_valid_request() {
     let mut buf = BytesMut::new();
     let mut machine = ClientHandshake::new(
         &mut stream,
-        ProtocolRegistry::new(vec!["warp"]).unwrap(),
+        SubprotocolRegistry::new(vec!["warp"]).unwrap(),
         &NoExtProvider,
         &mut buf,
     );
@@ -89,7 +89,7 @@ async fn handshake_invalid_requests() {
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -162,7 +162,7 @@ async fn expect_server_error(response: Response<()>, expected_error: HttpError) 
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -236,7 +236,11 @@ async fn bad_status_code() {
         .body(())
         .unwrap();
 
-    expect_server_error(response, HttpError::Status(StatusCode::IM_A_TEAPOT)).await;
+    expect_server_error(
+        response,
+        HttpError::Status(StatusCode::IM_A_TEAPOT.as_u16()),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -264,7 +268,7 @@ async fn ok_nonce() {
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -334,7 +338,7 @@ async fn redirection() {
         let mut buf = BytesMut::new();
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
             &NoExtProvider,
             &mut buf,
         );
@@ -394,7 +398,7 @@ where
 
         let mut machine = ClientHandshake::new(
             &mut stream,
-            ProtocolRegistry::new(registry).unwrap(),
+            SubprotocolRegistry::new(registry).unwrap(),
             &NoExtProvider,
             &mut buf,
         );
@@ -461,7 +465,10 @@ async fn invalid_subprotocol() {
         let protocol_error = err
             .downcast_ref::<ProtocolError>()
             .expect("Expected a protocol error");
-        assert_eq!(protocol_error, &ProtocolError::UnknownProtocol);
+        assert_eq!(
+            protocol_error,
+            &ProtocolError::InvalidSubprotocolHeader("warpy".to_string())
+        );
     })
     .await;
 }
@@ -486,11 +493,11 @@ impl From<ExtHandshakeErr> for Error {
 
 struct MockExtensionProxy<R>(&'static [(HeaderName, &'static str)], R)
 where
-    R: for<'h> Fn(&'h [Header]) -> Result<Option<MockExtension>, ExtHandshakeErr>;
+    R: for<'h> Fn(&'h HeaderMap) -> Result<Option<MockExtension>, ExtHandshakeErr>;
 
 impl<R> ExtensionProvider for MockExtensionProxy<R>
 where
-    R: for<'h> Fn(&'h [Header]) -> Result<Option<MockExtension>, ExtHandshakeErr>,
+    R: for<'h> Fn(&'h HeaderMap) -> Result<Option<MockExtension>, ExtHandshakeErr>,
 {
     type Extension = MockExtension;
     type Error = ExtHandshakeErr;
@@ -501,13 +508,16 @@ where
         }
     }
 
-    fn negotiate_client(&self, headers: &[Header]) -> Result<Option<Self::Extension>, Self::Error> {
-        (self.1)(headers)
+    fn negotiate_client(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<Self::Extension>, Self::Error> {
+        self.1(headers)
     }
 
     fn negotiate_server(
         &self,
-        _headers: &[Header],
+        _headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, ExtHandshakeErr> {
         panic!("Unexpected server-side extension negotiation")
     }
@@ -579,7 +589,7 @@ where
     let client_task = async move {
         let mut buf = BytesMut::new();
         let mut machine =
-            ClientHandshake::new(&mut stream, ProtocolRegistry::default(), &ext, &mut buf);
+            ClientHandshake::new(&mut stream, SubprotocolRegistry::default(), &ext, &mut buf);
         machine
             .encode(Request::get(TEST_URL).body(()).unwrap())
             .unwrap();
@@ -636,13 +646,13 @@ async fn negotiates_extension() {
     const HEADERS: &[(HeaderName, &str)] = &[(header::SEC_WEBSOCKET_EXTENSIONS, EXT)];
 
     let extension_proxy = MockExtensionProxy(HEADERS, |headers| {
-        let ext = headers.iter().find(|h| {
-            h.name
+        let ext = headers.iter().find(|(name, _value)| {
+            name.as_str()
                 .eq_ignore_ascii_case(header::SEC_WEBSOCKET_EXTENSIONS.as_str())
         });
         match ext {
-            Some(header) => {
-                let value = String::from_utf8(header.value.to_vec())
+            Some((_name, value)) => {
+                let value = String::from_utf8(value.as_bytes().to_vec())
                     .expect("Server returned invalid UTF-8");
                 if value == EXT {
                     Ok(Some(MockExtension(true)))
@@ -698,7 +708,7 @@ async fn negotiates_no_extension() {
 #[test]
 fn fails_to_build_request() {
     fn test<E: std::error::Error + PartialEq + 'static>(request: Request<()>, expected_error: E) {
-        match build_request(request, &NoExtProvider, &ProtocolRegistry::default()) {
+        match build_request(request, &NoExtProvider, &SubprotocolRegistry::default()) {
             Ok(r) => {
                 panic!("Expected a test failure of {}. Got {:?}", expected_error, r);
             }

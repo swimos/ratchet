@@ -55,7 +55,7 @@ pub use builder::{WebSocketClientBuilder, WebSocketServerBuilder};
 pub use errors::*;
 pub use ext::{NoExt, NoExtDecoder, NoExtEncoder, NoExtProvider};
 pub use handshake::{
-    accept, accept_with, subscribe, subscribe_with, ProtocolRegistry, TryIntoRequest,
+    accept, accept_with, subscribe, subscribe_with, SubprotocolRegistry, TryIntoRequest,
     UpgradedClient, UpgradedServer, WebSocketResponse, WebSocketUpgrader,
 };
 pub use protocol::{
@@ -70,3 +70,16 @@ pub(crate) type Request = http::Request<()>;
 /// A stream representing a WebSocket connection.
 pub trait WebSocketStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
 impl<S> WebSocketStream for S where S: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
+
+/// Provides utilities for handling WebSocket handshakes on the server side.
+///
+/// This module includes the necessary components to parse, negotiate, and respond to WebSocket
+/// connection upgrade requests from clients.
+///
+/// It should generally not be required unless integrating Ratchet into other libraries.
+pub mod server {
+    pub use crate::handshake::{
+        build_response, build_response_headers, handshake, parse_request_parts,
+        response_from_headers, validate_method_and_version, UpgradeRequest, UpgradeRequestParts,
+    };
+}

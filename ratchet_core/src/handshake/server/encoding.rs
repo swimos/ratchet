@@ -13,32 +13,27 @@
 // limitations under the License.
 
 use crate::handshake::io::BufferedIo;
-use crate::handshake::server::HandshakeResult;
-use crate::handshake::{
-    get_header, validate_header_any, validate_header_value, ParseResult, METHOD_GET, UPGRADE_STR,
-    WEBSOCKET_STR, WEBSOCKET_VERSION_STR,
-};
-use crate::handshake::{negotiate_request, TryMap};
-use crate::{Error, ErrorKind, HttpError, ProtocolRegistry};
+use crate::handshake::server::{check_partial_request, UpgradeRequest, UpgradeRequestParts};
+use crate::handshake::{ParseResult, TryFromWrapper};
+use crate::server::parse_request_parts;
+use crate::{Error, SubprotocolRegistry};
 use bytes::{BufMut, BytesMut};
-use http::header::HOST;
-use http::{HeaderMap, StatusCode, Version};
-use httparse::{Header, Status};
-use log::error;
+use http::request::Parts;
+use http::{HeaderMap, Request, StatusCode};
+use httparse::Status;
 use ratchet_ext::ExtensionProvider;
 use tokio::io::AsyncWrite;
 use tokio_util::codec::Decoder;
 
 /// The maximum number of headers that will be parsed.
 const MAX_HEADERS: usize = 32;
-const HTTP_VERSION: &[u8] = b"HTTP/1.1 ";
+const HTTP_VERSION_STR: &[u8] = b"HTTP/1.1 ";
 const STATUS_TERMINATOR_LEN: usize = 2;
 const TERMINATOR_NO_HEADERS: &[u8] = b"\r\n\r\n";
 const TERMINATOR_WITH_HEADER: &[u8] = b"\r\n";
-const HTTP_VERSION_INT: u8 = 1;
 
 pub struct RequestParser<E> {
-    pub subprotocols: ProtocolRegistry,
+    pub subprotocols: SubprotocolRegistry,
     pub extension: E,
 }
 
@@ -46,7 +41,7 @@ impl<E> Decoder for RequestParser<E>
 where
     E: ExtensionProvider,
 {
-    type Item = (HandshakeResult<E::Extension>, usize);
+    type Item = (UpgradeRequest<E::Extension>, usize);
     type Error = Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -55,11 +50,11 @@ where
             extension,
         } = self;
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut request = httparse::Request::new(&mut headers);
+        let request = httparse::Request::new(&mut headers);
 
-        match try_parse_request(buf, &mut request, extension, subprotocols)? {
+        match try_parse_request(buf, request, extension, subprotocols)? {
             ParseResult::Complete(result, count) => Ok(Some((result, count))),
-            ParseResult::Partial => {
+            ParseResult::Partial(request) => {
                 check_partial_request(&request)?;
                 Ok(None)
             }
@@ -79,7 +74,7 @@ where
 {
     buf.clear();
 
-    let version_count = HTTP_VERSION.len();
+    let version_count = HTTP_VERSION_STR.len();
     let status_bytes = status.as_str().as_bytes();
     let reason_len = status
         .canonical_reason()
@@ -97,7 +92,7 @@ where
 
     buf.reserve(version_count + status_bytes.len() + reason_len + headers_len + terminator_len);
 
-    buf.put_slice(HTTP_VERSION);
+    buf.put_slice(HTTP_VERSION_STR);
     buf.put_slice(status.as_str().as_bytes());
 
     match status.canonical_reason() {
@@ -125,125 +120,45 @@ where
     buffered.write().await
 }
 
-pub fn try_parse_request<'l, E>(
-    buffer: &'l [u8],
-    request: &mut httparse::Request<'_, 'l>,
+pub fn try_parse_request<'b, E>(
+    buffer: &'b [u8],
+    mut request: httparse::Request<'b, 'b>,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
-) -> Result<ParseResult<HandshakeResult<E::Extension>>, Error>
+    subprotocols: &mut SubprotocolRegistry,
+) -> Result<ParseResult<httparse::Request<'b, 'b>, UpgradeRequest<E::Extension>>, Error>
 where
     E: ExtensionProvider,
 {
     match request.parse(buffer) {
         Ok(Status::Complete(count)) => {
-            parse_request(request, extension, subprotocols).map(|r| ParseResult::Complete(r, count))
+            let request = Request::try_from(TryFromWrapper(request))?;
+            let (parts, body) = request.into_parts();
+            let Parts {
+                method,
+                version,
+                headers,
+                ..
+            } = &parts;
+
+            let UpgradeRequestParts {
+                key,
+                subprotocol,
+                extension,
+                extension_header,
+            } = parse_request_parts(*version, method, headers, extension, subprotocols)?;
+
+            Ok(ParseResult::Complete(
+                UpgradeRequest {
+                    key,
+                    subprotocol,
+                    extension,
+                    request: Request::from_parts(parts, body),
+                    extension_header,
+                },
+                count,
+            ))
         }
-        Ok(Status::Partial) => Ok(ParseResult::Partial),
+        Ok(Status::Partial) => Ok(ParseResult::Partial(request)),
         Err(e) => Err(e.into()),
-    }
-}
-
-pub fn check_partial_request(request: &httparse::Request) -> Result<(), Error> {
-    match request.version {
-        Some(HTTP_VERSION_INT) | None => {}
-        Some(_) => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-            ))
-        }
-    }
-
-    match request.method {
-        Some(m) if m.eq_ignore_ascii_case(METHOD_GET) => {}
-        None => {}
-        m => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpMethod(m.map(ToString::to_string)),
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-pub fn parse_request<E>(
-    request: &mut httparse::Request<'_, '_>,
-    extension: E,
-    subprotocols: &mut ProtocolRegistry,
-) -> Result<HandshakeResult<E::Extension>, Error>
-where
-    E: ExtensionProvider,
-{
-    match request.version {
-        Some(HTTP_VERSION_INT) => {}
-        _ => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-            ))
-        }
-    }
-
-    match request.method {
-        Some(m) if m.eq_ignore_ascii_case(METHOD_GET) => {}
-        m => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpMethod(m.map(ToString::to_string)),
-            ));
-        }
-    }
-
-    let headers = &request.headers;
-    validate_header_any(headers, http::header::CONNECTION, UPGRADE_STR)?;
-    validate_header_value(headers, http::header::UPGRADE, WEBSOCKET_STR)?;
-    validate_header_value(
-        headers,
-        http::header::SEC_WEBSOCKET_VERSION,
-        WEBSOCKET_VERSION_STR,
-    )?;
-
-    if let Err(e) = validate_host_header(headers) {
-        error!("Server responded with invalid 'host' headers");
-        return Err(e);
-    }
-
-    let key = get_header(headers, http::header::SEC_WEBSOCKET_KEY)?;
-    let subprotocol = negotiate_request(subprotocols, request)?;
-    let (extension, extension_header) = extension
-        .negotiate_server(request.headers)
-        .map(Option::unzip)
-        .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?;
-
-    Ok(HandshakeResult {
-        key,
-        request: request.try_map()?,
-        extension,
-        subprotocol,
-        extension_header,
-    })
-}
-
-/// Validates that 'headers' contains one 'host' header and that it is not a seperated list.
-fn validate_host_header(headers: &[Header]) -> Result<(), Error> {
-    let len = headers
-        .iter()
-        .filter_map(|header| {
-            if header.name.eq_ignore_ascii_case(HOST.as_str()) {
-                Some(header.value.split(|c| c == &b' ' || c == &b','))
-            } else {
-                None
-            }
-        })
-        .count();
-    if len == 1 {
-        Ok(())
-    } else {
-        Err(Error::with_cause(
-            ErrorKind::Http,
-            HttpError::MissingHeader(HOST),
-        ))
     }
 }

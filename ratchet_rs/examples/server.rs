@@ -14,7 +14,8 @@
 
 use bytes::BytesMut;
 use ratchet_rs::{
-    Error, Message, NoExtProvider, PayloadType, ProtocolRegistry, UpgradedServer, WebSocketConfig,
+    Error, Message, NoExtProvider, PayloadType, SubprotocolRegistry, UpgradedServer,
+    WebSocketConfig,
 };
 use tokio::net::TcpListener;
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
@@ -31,7 +32,7 @@ async fn main() -> Result<(), Error> {
             socket,
             WebSocketConfig::default(),
             NoExtProvider,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
         )
         .await?;
 

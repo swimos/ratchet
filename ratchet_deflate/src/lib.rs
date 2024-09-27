@@ -29,8 +29,8 @@ use thiserror::Error;
 
 pub use error::DeflateExtensionError;
 use ratchet_ext::{
-    Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader, Header,
-    HeaderMap, HeaderValue, OpCode, ReunitableExtension, RsvBits, SplittableExtension,
+    Extension, ExtensionDecoder, ExtensionEncoder, ExtensionProvider, FrameHeader, HeaderMap,
+    HeaderValue, OpCode, ReunitableExtension, RsvBits, SplittableExtension,
 };
 
 use crate::codec::{BufCompress, BufDecompress};
@@ -81,13 +81,16 @@ impl ExtensionProvider for DeflateExtProvider {
         apply_headers(headers, &self.config);
     }
 
-    fn negotiate_client(&self, headers: &[Header]) -> Result<Option<Self::Extension>, Self::Error> {
+    fn negotiate_client(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<Self::Extension>, Self::Error> {
         negotiate_client(headers, &self.config)
     }
 
     fn negotiate_server(
         &self,
-        headers: &[Header],
+        headers: &HeaderMap,
     ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error> {
         negotiate_server(headers, &self.config)
     }

@@ -16,7 +16,6 @@ use crate::protocol::{CloseCodeParseErr, OpCodeParseErr};
 use http::header::{HeaderName, InvalidHeaderValue};
 use http::status::InvalidStatusCode;
 use http::uri::InvalidUri;
-use http::StatusCode;
 use std::any::Any;
 use std::error::Error as StdError;
 use std::fmt::{Display, Formatter};
@@ -156,9 +155,12 @@ pub enum HttpError {
     #[error("Redirected: `{0}`")]
     Redirected(String),
     /// The peer returned with a status code other than 101.
-    #[error("Status code: `{0}`")]
-    Status(StatusCode),
-    /// An invalid HTTP version was received in a request.
+    #[error("Status code: `{0:?}`")]
+    Status(u16),
+    /// A request or response was missing its status code.
+    #[error("Missing status code")]
+    MissingStatus,
+    /// An invalid HTTP version was received in a request or response.
     #[error("Invalid HTTP version: `{0:?}`")]
     HttpVersion(String),
     /// A request or response was missing an expected header.
@@ -272,14 +274,11 @@ pub enum CloseCause {
 }
 
 /// WebSocket protocol errors.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ProtocolError {
     /// Invalid encoding was received.
     #[error("Not valid UTF-8 encoding")]
     Encoding,
-    /// A peer selected a protocol that was not sent.
-    #[error("Received an unknown subprotocol")]
-    UnknownProtocol,
     /// An invalid OpCode was received.
     #[error("Bad OpCode: `{0}`")]
     OpCode(OpCodeParseErr),
@@ -313,6 +312,9 @@ pub enum ProtocolError {
     /// An invalid control frame was received.
     #[error("Received an invalid control frame")]
     InvalidControlFrame,
+    /// Failed to build subprotocol header.
+    #[error("Invalid subprotocol header: `{0}`")]
+    InvalidSubprotocolHeader(String),
 }
 
 impl From<FromUtf8Error> for Error {

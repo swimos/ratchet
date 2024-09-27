@@ -30,12 +30,14 @@ use crate::errors::{Error, ErrorKind, HttpError};
 use crate::handshake::client::encoding::{build_request, encode_request};
 use crate::handshake::io::BufferedIo;
 use crate::handshake::{
-    negotiate_response, validate_header, validate_header_value, ParseResult, ProtocolRegistry,
-    StreamingParser, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
+    validate_header, validate_header_value, ParseResult, StreamingParser, SubprotocolRegistry,
+    TryFromWrapper, ACCEPT_KEY, BAD_STATUS_CODE, UPGRADE_STR, WEBSOCKET_STR,
 };
 use crate::{
     NoExt, NoExtProvider, Role, TryIntoRequest, WebSocket, WebSocketConfig, WebSocketStream,
 };
+use http::header::LOCATION;
+use log::warn;
 use ratchet_ext::ExtensionProvider;
 use tokio_util::codec::Decoder;
 
@@ -80,7 +82,7 @@ where
         &mut stream,
         request.try_into_request()?,
         NoExtProvider,
-        ProtocolRegistry::default(),
+        SubprotocolRegistry::default(),
         &mut read_buffer,
     )
     .await?;
@@ -98,7 +100,7 @@ pub async fn subscribe_with<S, E, R>(
     mut stream: S,
     request: R,
     extension: E,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
 ) -> Result<UpgradedClient<S, E::Extension>, Error>
 where
     S: WebSocketStream,
@@ -128,7 +130,7 @@ async fn exec_client_handshake<S, E>(
     stream: &mut S,
     request: Request<()>,
     extension: E,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
     buf: &mut BytesMut,
 ) -> Result<HandshakeResult<E::Extension>, Error>
 where
@@ -163,14 +165,14 @@ where
 struct ClientHandshake<'s, S, E> {
     buffered: BufferedIo<'s, S>,
     nonce: Nonce,
-    subprotocols: ProtocolRegistry,
+    subprotocols: SubprotocolRegistry,
     extension: &'s E,
 }
 
 pub struct StreamingResponseParser<'b, E> {
     nonce: &'b Nonce,
     extension: &'b E,
-    subprotocols: &'b mut ProtocolRegistry,
+    subprotocols: &'b mut SubprotocolRegistry,
 }
 
 impl<'b, E> Decoder for StreamingResponseParser<'b, E>
@@ -188,11 +190,11 @@ where
         } = self;
 
         let mut headers = [httparse::EMPTY_HEADER; 32];
-        let mut response = Response::new(&mut headers);
+        let response = Response::new(&mut headers);
 
-        match try_parse_response(buf, &mut response, nonce, extension, subprotocols)? {
+        match try_parse_response(buf, response, nonce, extension, subprotocols)? {
             ParseResult::Complete(result, count) => Ok(Some((result, count))),
-            ParseResult::Partial => {
+            ParseResult::Partial(response) => {
                 check_partial_response(&response)?;
                 Ok(None)
             }
@@ -207,7 +209,7 @@ where
 {
     pub fn new(
         socket: &'s mut S,
-        subprotocols: ProtocolRegistry,
+        subprotocols: SubprotocolRegistry,
         extension: &'s E,
         buf: &'s mut BytesMut,
     ) -> ClientHandshake<'s, S, E> {
@@ -303,84 +305,92 @@ fn check_partial_response(response: &Response) -> Result<(), Error> {
             Ok(())
         }
         Some(code) => match StatusCode::try_from(code) {
-            Ok(code) => Err(Error::with_cause(ErrorKind::Http, HttpError::Status(code))),
+            Ok(code) => Err(Error::with_cause(
+                ErrorKind::Http,
+                HttpError::Status(code.as_u16()),
+            )),
             Err(_) => Err(Error::with_cause(ErrorKind::Http, BAD_STATUS_CODE)),
         },
         None => Ok(()),
     }
 }
 
-fn try_parse_response<'l, E>(
-    buffer: &'l [u8],
-    response: &mut Response<'_, 'l>,
+fn try_parse_response<'b, E>(
+    buffer: &'b [u8],
+    mut response: Response<'b, 'b>,
     expected_nonce: &Nonce,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
-) -> Result<ParseResult<HandshakeResult<E::Extension>>, Error>
+    subprotocols: &mut SubprotocolRegistry,
+) -> Result<ParseResult<Response<'b, 'b>, HandshakeResult<E::Extension>>, Error>
 where
     E: ExtensionProvider,
 {
     match response.parse(buffer) {
-        Ok(Status::Complete(count)) => {
-            parse_response(response, expected_nonce, extension, subprotocols)
-                .map(|r| ParseResult::Complete(r, count))
-        }
-        Ok(Status::Partial) => Ok(ParseResult::Partial),
+        Ok(Status::Complete(count)) => parse_response(
+            TryFromWrapper(response).try_into()?,
+            expected_nonce,
+            extension,
+            subprotocols,
+        )
+        .map(|r| ParseResult::Complete(r, count)),
+        Ok(Status::Partial) => Ok(ParseResult::Partial(response)),
         Err(e) => Err(e.into()),
     }
 }
 
 fn parse_response<E>(
-    response: &Response,
+    response: http::Response<()>,
     expected_nonce: &Nonce,
     extension: E,
-    subprotocols: &mut ProtocolRegistry,
+    subprotocols: &SubprotocolRegistry,
 ) -> Result<HandshakeResult<E::Extension>, Error>
 where
     E: ExtensionProvider,
 {
-    match response.version {
+    if response.version() < Version::HTTP_11 {
         // rfc6455 § 4.2.1.1: must be HTTP/1.1 or higher
-        Some(1) => {}
-        _ => {
-            return Err(Error::with_cause(
-                ErrorKind::Http,
-                HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
-            ))
-        }
+        return Err(Error::with_cause(
+            ErrorKind::Http,
+            HttpError::HttpVersion(format!("{:?}", Version::HTTP_10)),
+        ));
     }
 
-    let raw_status_code = response.code.ok_or_else(|| Error::new(ErrorKind::Http))?;
-    let status_code = StatusCode::from_u16(raw_status_code)?;
+    let status_code = response.status();
     match status_code {
         c if c == StatusCode::SWITCHING_PROTOCOLS => {}
         c if c.is_redirection() => {
-            return match response.headers.iter().find(|h| h.name == header::LOCATION) {
-                Some(header) => {
+            return match response.headers().get(LOCATION) {
+                Some(value) => {
                     // the value _should_ be valid UTF-8
-                    let location = String::from_utf8(header.value.to_vec())
+                    let location = String::from_utf8(value.as_bytes().to_vec())
                         .map_err(|_| Error::new(ErrorKind::Http))?;
                     Err(Error::with_cause(
                         ErrorKind::Http,
                         HttpError::Redirected(location),
                     ))
                 }
-                None => Err(Error::with_cause(ErrorKind::Http, HttpError::Status(c))),
+                None => {
+                    warn!("Received a redirection status code with no location header");
+                    Err(Error::with_cause(
+                        ErrorKind::Http,
+                        HttpError::Status(c.as_u16()),
+                    ))
+                }
             };
         }
         status_code => {
             return Err(Error::with_cause(
                 ErrorKind::Http,
-                HttpError::Status(status_code),
+                HttpError::Status(status_code.as_u16()),
             ))
         }
     }
 
-    validate_header_value(response.headers, header::UPGRADE, WEBSOCKET_STR)?;
-    validate_header_value(response.headers, header::CONNECTION, UPGRADE_STR)?;
+    validate_header_value(response.headers(), header::UPGRADE, WEBSOCKET_STR)?;
+    validate_header_value(response.headers(), header::CONNECTION, UPGRADE_STR)?;
 
     validate_header(
-        response.headers,
+        response.headers(),
         header::SEC_WEBSOCKET_ACCEPT,
         |_name, actual| {
             let mut digest = Sha1::new();
@@ -397,9 +407,9 @@ where
     )?;
 
     Ok(HandshakeResult {
-        subprotocol: negotiate_response(subprotocols, response)?,
+        subprotocol: subprotocols.validate_accepted_subprotocol(response.headers())?,
         extension: extension
-            .negotiate_client(response.headers)
+            .negotiate_client(response.headers())
             .map_err(|e| Error::with_cause(ErrorKind::Extension, e))?,
     })
 }

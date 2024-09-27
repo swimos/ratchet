@@ -17,8 +17,7 @@ use crate::handshake::{apply_headers, on_request, on_response, NegotiationErr};
 use crate::{DeflateConfig, InitialisedDeflateConfig, WindowBits};
 use flate2::Compression;
 use http::header::SEC_WEBSOCKET_EXTENSIONS;
-use http::HeaderMap;
-use ratchet_ext::Header;
+use http::{HeaderMap, HeaderValue};
 
 fn test_headers(config: DeflateConfig, expected: &str) {
     let mut header_map = HeaderMap::new();
@@ -96,14 +95,14 @@ fn applies_headers() {
 
 #[test]
 fn request_negotiates_nothing() {
-    match on_request(&[], &DeflateConfig::default()) {
+    match on_request(&HeaderMap::new(), &DeflateConfig::default()) {
         Err(NegotiationErr::Failed) => {}
         _ => panic!("Expected no extension"),
     }
 }
 
-fn request_test_valid_default(headers: &[Header]) {
-    match on_request(headers, &DeflateConfig::default()) {
+fn request_test_valid_default(headers: HeaderMap) {
+    match on_request(&headers, &DeflateConfig::default()) {
         Ok((config, header)) => {
             let value = header.to_str().expect("Malformatted header produced");
             assert_eq!(
@@ -128,36 +127,27 @@ fn request_test_valid_default(headers: &[Header]) {
 #[test]
 fn request_negotiates_default_spaces() {
     request_test_valid_default(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover",
-        }]
+        HeaderMap::from_iter([(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover"))])
     );
     request_test_valid_default(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate;         client_max_window_bits    ; server_no_context_takeover      ;     client_no_context_takeover",
-        }]
+        HeaderMap::from_iter([(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate;         client_max_window_bits    ; server_no_context_takeover      ;     client_no_context_takeover"))])
     );
 }
 
 #[test]
 fn request_negotiates_no_spaces() {
     request_test_valid_default(
-        &[Header {
-        name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-        value: b"permessage-deflate;client_max_window_bits;server_no_context_takeover;client_no_context_takeover",
-        }]
+        HeaderMap::from_iter([(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate;client_max_window_bits;server_no_context_takeover;client_no_context_takeover"))])
     );
 }
 
 #[test]
 fn request_unknown_header() {
     match on_request(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-bzip",
-        }],
+        &HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static("permessage-bzip"),
+        )]),
         &DeflateConfig::default(),
     ) {
         Err(NegotiationErr::Failed) => {}
@@ -167,55 +157,34 @@ fn request_unknown_header() {
 
 #[test]
 fn request_mixed_headers_with_unknown() {
-    let headers = &[
-        Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-bzip",
-        },
-        Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover",
-        }
-    ];
-
+    let headers = HeaderMap::from_iter([
+        (SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-bzip")),
+        (SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover"))
+    ]);
     request_test_valid_default(headers);
 }
 
 #[test]
 fn request_mixed_headers_with_unnegotiable() {
-    let headers = &[
-        Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-bzip",
-        },
-        Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate; client_max_window_bits=7; server_max_window_bits=8; server_no_context_takeover; client_no_context_takeover",
-        },
-        Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover",
-        }
-    ];
+    let headers = HeaderMap::from_iter([
+        (SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-bzip")),
+        (SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits=7; server_max_window_bits=8; server_no_context_takeover; client_no_context_takeover")),
+        (SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover")),
+    ]);
 
     request_test_valid_default(headers);
 }
 
 #[test]
 fn request_truncated_headers() {
-    request_test_valid_default(&[
-        Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate; client_max_window_bits=7; server_max_window_bits=8; server_no_context_takeover; client_no_context_takeover,                   permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover",        }
-    ])
+    request_test_valid_default(HeaderMap::from_iter([(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits=7; server_max_window_bits=8; server_no_context_takeover; client_no_context_takeover,                   permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover"))]))
 }
 
 #[test]
 fn request_no_accept_no_context_takeover() {
-    let header = Header {
-        name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-        value: b"permessage-deflate; client_max_window_bits=7; server_max_window_bits=8; server_no_context_takeover; client_no_context_takeover,                   permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover",
-    };
+    let headers = HeaderMap::from_iter([
+        (SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits=7; server_max_window_bits=8; server_no_context_takeover; client_no_context_takeover,                   permessage-deflate; client_max_window_bits; server_no_context_takeover; client_no_context_takeover"))
+    ]);
     let config = DeflateConfig {
         server_max_window_bits: WindowBits::fifteen(),
         client_max_window_bits: WindowBits::fifteen(),
@@ -225,7 +194,7 @@ fn request_no_accept_no_context_takeover() {
         compression_level: Compression::fast(),
     };
 
-    match on_request(&[header], &config) {
+    match on_request(&headers, &config) {
         Ok((config, header)) => {
             let value = header.to_str().expect("Malformatted header produced");
             assert_eq!(value, "permessage-deflate; client_no_context_takeover");
@@ -244,8 +213,8 @@ fn request_no_accept_no_context_takeover() {
     }
 }
 
-fn request_test_malformatted_default(headers: &[Header], expected: DeflateExtensionError) {
-    match on_request(headers, &DeflateConfig::default()) {
+fn request_test_malformatted_default(headers: HeaderMap, expected: DeflateExtensionError) {
+    match on_request(&headers, &DeflateConfig::default()) {
         Err(NegotiationErr::Err(e)) => assert_eq!(e.to_string(), expected.to_string()),
         e => panic!("Expected: `{:?}`. Got: {:?}", expected, e),
     }
@@ -254,19 +223,16 @@ fn request_test_malformatted_default(headers: &[Header], expected: DeflateExtens
 #[test]
 fn request_malformatted_window_bits() {
     request_test_malformatted_default(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value:
-                b"permessage-deflate; client_max_window_bits=2.71828; server_max_window_bits=3.14159",
-        }],
+        HeaderMap::from_iter([(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static("permessage-deflate; client_max_window_bits=2.71828; server_max_window_bits=3.14159"))]),
         DeflateExtensionError::InvalidMaxWindowBits,
     );
     request_test_malformatted_default(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value:
-                b"permessage-deflate; client_max_window_bits=666; server_max_window_bits=3.14159",
-        }],
+        HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static(
+                "permessage-deflate; client_max_window_bits=666; server_max_window_bits=3.14159",
+            ),
+        )]),
         DeflateExtensionError::InvalidMaxWindowBits,
     )
 }
@@ -274,10 +240,10 @@ fn request_malformatted_window_bits() {
 #[test]
 fn request_unknown_parameter() {
     request_test_malformatted_default(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate; peer_max_window_bits",
-        }],
+        HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static("permessage-deflate; peer_max_window_bits"),
+        )]),
         DeflateExtensionError::NegotiationError(
             "Unknown permessage-deflate parameter: peer_max_window_bits".to_string(),
         ),
@@ -286,7 +252,7 @@ fn request_unknown_parameter() {
 
 #[test]
 fn response_no_ext() {
-    match on_response(&[], &DeflateConfig::default()) {
+    match on_response(&HeaderMap::new(), &DeflateConfig::default()) {
         Err(NegotiationErr::Failed) => {}
         _ => panic!("Expected no extension"),
     }
@@ -295,10 +261,10 @@ fn response_no_ext() {
 #[test]
 fn response_unknown_ext() {
     match on_response(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-bzip",
-        }],
+        &HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static("permessage-bzip"),
+        )]),
         &DeflateConfig::default(),
     ) {
         Err(NegotiationErr::Failed) => {}
@@ -309,10 +275,12 @@ fn response_unknown_ext() {
 #[test]
 fn response_duplicate_param() {
     match on_response(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate;server_no_context_takeover;server_no_context_takeover",
-        }],
+        &HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static(
+                "permessage-deflate;server_no_context_takeover;server_no_context_takeover",
+            ),
+        )]),
         &DeflateConfig::default(),
     ) {
         Err(NegotiationErr::Err(DeflateExtensionError::NegotiationError(s)))
@@ -325,10 +293,10 @@ fn response_duplicate_param() {
 #[test]
 fn response_invalid_max_bits() {
     match on_response(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate;server_max_window_bits=666",
-        }],
+        &HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static("permessage-deflate;server_max_window_bits=666"),
+        )]),
         &DeflateConfig::default(),
     ) {
         Err(NegotiationErr::Err(DeflateExtensionError::InvalidMaxWindowBits)) => {}
@@ -339,10 +307,10 @@ fn response_invalid_max_bits() {
 #[test]
 fn response_unknown_param() {
     match on_response(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate;invalid=param",
-        }],
+        &HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static("permessage-deflate;invalid=param"),
+        )]),
         &DeflateConfig::default(),
     ) {
         Err(NegotiationErr::Err(DeflateExtensionError::NegotiationError(s)))
@@ -360,10 +328,10 @@ fn response_no_context_takeover() {
     };
 
     match on_response(
-        &[Header {
-            name: SEC_WEBSOCKET_EXTENSIONS.as_str(),
-            value: b"permessage-deflate;client_no_context_takeover",
-        }],
+        &HeaderMap::from_iter([(
+            SEC_WEBSOCKET_EXTENSIONS,
+            HeaderValue::from_static("permessage-deflate;client_no_context_takeover"),
+        )]),
         &config,
     ) {
         Err(NegotiationErr::Err(DeflateExtensionError::NegotiationError(s)))
