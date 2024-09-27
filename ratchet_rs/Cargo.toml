@@ -17,6 +17,8 @@ split = ["ratchet_core/split"]
 fixture = ["ratchet_core/fixture"]
 
 [dependencies]
+axum = { workspace = true, optional = true }
+hyper = { workspace = true, features = ["http1", "server", "client"], optional = true }
 ratchet_core = { version = "1.0.3", path = "../ratchet_core" }
 ratchet_ext = { version = "1.0.3", path = "../ratchet_ext" }
 ratchet_deflate = { version = "1.0.3", path = "../ratchet_deflate", optional = true }
