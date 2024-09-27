@@ -2,29 +2,37 @@
 <br><br><br>
 
 # Ratchet
-Ratchet is a fast, robust, lightweight and fully asynchronous implementation of [RFC6455](https://datatracker.ietf.org/doc/html/rfc6455) (The WebSocket protocol). Complete with an optional implementation of [RFC7692](https://datatracker.ietf.org/doc/html/rfc7692) (Compression Extensions For WebSocket).
 
-Ratchet powers [SwimOS on Rust](https://github.com/swimos/swim-rust/); a framework for real-time streaming data applications.
+Ratchet is a fast, robust, lightweight and fully asynchronous implementation
+of [RFC6455](https://datatracker.ietf.org/doc/html/rfc6455) (The WebSocket protocol). Complete with an optional
+implementation of [RFC7692](https://datatracker.ietf.org/doc/html/rfc7692) (Compression Extensions For WebSocket).
+
+Ratchet powers [SwimOS on Rust](https://github.com/swimos/swim-rust/); a framework for real-time streaming data
+applications.
 
 [![Crates.io][crates-badge]][crates-url]
 
 [crates-badge]: https://img.shields.io/crates/v/ratchet_rs.svg
+
 [crates-url]: https://crates.io/crates/ratchet_rs
 
 [Documentation](https://docs.rs/ratchet_rs/latest/ratchet_rs/)
 
-
 # Features
+
 - Implement your own extensions using [ratchet_ext](/ratchet_ext).
 - Per-message deflate with [ratchet_deflate](/ratchet_deflate) or enable with the `deflate`
   feature.
 - Split WebSocket with the `split` feature.
 
 # Testing
+
 Ratchet is fully tested and passes every Autobahn test for both client and server modes.
 
 # Examples
+
 ## Client
+
 ```rust
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -37,7 +45,7 @@ async fn main() -> Result<(), Error> {
   )
   .await?;
 
-  let UpgradedClient{ socket, subprotocol }=upgraded;
+  let UpgradedClient { socket, subprotocol } = upgraded;
   let mut buf = BytesMut::new();
 
   loop {
@@ -60,6 +68,7 @@ async fn main() -> Result<(), Error> {
 ```
 
 ## Server
+
 ```rust
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -74,7 +83,7 @@ async fn main() -> Result<(), Error> {
             socket,
             WebSocketConfig::default(),
             NoExtProvider,
-            ProtocolRegistry::default(),
+            SubprotocolRegistry::default(),
         )
         .await?;
 
@@ -115,18 +124,21 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 ```
+
 ## Deflate
+
 ```rust
   let mut websocket = ratchet::accept_with(
       socket,
       WebSocketConfig::default(),
       DeflateProvider,
-      ProtocolRegistry::default(),
+      SubprotocolRegistry::default(),
   )
   .await?;
 ```
 
 ## Split
+
 ```rust
 // A split operation will only fail if the WebSocket is already closed.
 let (mut sender, mut receiver) = websocket.split()?;
@@ -148,4 +160,5 @@ loop {
 ```
 
 # License
+
 Ratchet is licensed under the [Apache License 2.0](LICENSE)
