@@ -636,11 +636,10 @@ pub fn build_response_headers(
 /// negotiates the subprotocols and extensions specified in the request.
 ///
 /// # Arguments
-/// - `request`: An `http::Request<B>` representing the incoming HTTP request from the client, which
-/// is expected to contain WebSocket-specific headers. While it is discouraged for GET requests to
-/// have a body it is not technically incorrect and the use of this function is lowering the
-/// guardrails to allow for Ratchet to be more easily integrated into other libraries. It is the
-/// implementors responsibility to perform any validation on the body.
+/// - `version`: The HTTP version of the request.
+/// - `method`: The HTTP method of the request.
+/// - `headers`: A reference to the request's `HeaderMap` containing the HTTP headers. These headers
+///  must include the necessary WebSocket headers such as `Sec-WebSocket-Key` and `Upgrade`.
 /// - `extension`: An instance of a type that implements the `ExtensionProvider`
 /// trait. This object is responsible for negotiating any server-supported
 /// extensions requested by the client.
@@ -648,11 +647,10 @@ pub fn build_response_headers(
 /// to negotiate one with the client.
 ///
 /// # Returns
-/// This function returns a `Result<UpgradeRequest<E::Extension, B>, Error>`, where:
-/// - `Ok(UpgradeRequest)`: Contains the parsed information needed for the WebSocket
-///   handshake, including the WebSocket key, negotiated subprotocol, optional
-///   extensions, and the original HTTP request.
-/// - `Err(Error)`: Contains an error if the request is invalid or cannot be parsed.
+/// This function returns a `Result<UpgradeRequestParts<E::Extension>, Error>`, where:
+/// - `Ok(UpgradeRequestParts)`: Contains the parsed information needed for the WebSocket
+///   handshake, including the WebSocket key, negotiated subprotocol, and an optional extension.
+/// - `Err(Error)`: Contains an error if the request parts are invalid or cannot be parsed.
 ///   This could include issues such as unsupported HTTP versions, invalid methods,
 ///   missing required headers, or failed negotiations for subprotocols or extensions.
 pub fn parse_request_parts<E>(
