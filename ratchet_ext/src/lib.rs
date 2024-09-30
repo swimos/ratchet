@@ -137,6 +137,40 @@ where
     }
 }
 
+impl<E> ExtensionProvider for Option<E>
+where
+    E: ExtensionProvider,
+{
+    type Extension = E::Extension;
+    type Error = E::Error;
+
+    fn apply_headers(&self, headers: &mut HeaderMap) {
+        if let Some(provider) = self {
+            provider.apply_headers(headers);
+        }
+    }
+
+    fn negotiate_client(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<Self::Extension>, Self::Error> {
+        match self {
+            Some(ext) => ext.negotiate_client(headers),
+            None => Ok(None),
+        }
+    }
+
+    fn negotiate_server(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<Option<(Self::Extension, HeaderValue)>, Self::Error> {
+        match self {
+            Some(ext) => ext.negotiate_server(headers),
+            None => Ok(None),
+        }
+    }
+}
+
 /// A data code for a frame.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OpCode {
