@@ -355,6 +355,28 @@ pub struct UpgradeRequestParts<E> {
     pub extension_header: Option<HeaderValue>,
 }
 
+/// A negotiated WebSocket response and its configured subprotcol and extension, if any.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct UpgradeResponseParts<E> {
+    /// An `http::Response<()>`, which represents the WebSocket handshake response.
+    pub response: Response<()>,
+
+    /// The optional WebSocket subprotocol agreed upon during the handshake.
+    ///
+    /// The subprotocol is used to define the application-specific communication on top of the
+    /// WebSocket connection, such as `wamp` or `graphql-ws`. If no subprotocol is requested or
+    /// agreed upon, this will be `None`.
+    pub subprotocol: Option<String>,
+
+    /// The optional WebSocket extension negotiated during the handshake.
+    ///
+    /// Extensions allow WebSocket connections to have additional functionality, such as compression
+    /// or multiplexing. This field represents any such negotiated extension, or `None` if no
+    /// extensions were negotiated.
+    pub extension: Option<E>,
+}
+
 /// Represents a parsed WebSocket connection upgrade HTTP request.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -457,15 +479,7 @@ pub fn build_response(
 ///
 /// # Returns
 ///
-/// This function returns a `Result` containing:
-/// - A tuple consisting of:
-///   - An `http::Response<()>`, which represents the WebSocket handshake response.
-///     The response includes headers such as `Sec-WebSocket-Accept` to confirm the upgrade.
-///   - An optional `E::Extension`, which represents the negotiated extension, if any.
-///
-/// If the handshake fails, an `Error` is returned, which may be caused by invalid
-/// requests, issues parsing headers, or problems negotiating the WebSocket subprotocols
-/// or extensions.
+/// The negotiated response and the selected subprotocol and extension, if any.
 ///
 /// # Type Parameters
 ///
@@ -484,9 +498,9 @@ pub fn build_response(
 /// - Failure to negotiate the WebSocket extensions or subprotocols.
 pub fn handshake<E, B>(
     request: http::Request<B>,
-    extension: &E,
+    extension: E,
     subprotocols: &SubprotocolRegistry,
-) -> Result<(Response<()>, Option<E::Extension>), Error>
+) -> Result<UpgradeResponseParts<E::Extension>, Error>
 where
     E: ExtensionProvider,
 {
@@ -504,10 +518,11 @@ where
         extension_header,
         ..
     } = parse_request_parts(version, &method, &headers, extension, subprotocols)?;
-    Ok((
-        build_response(key, subprotocol, extension_header)?,
+    Ok(UpgradeResponseParts {
+        response: build_response(key, subprotocol.clone(), extension_header)?,
+        subprotocol,
         extension,
-    ))
+    })
 }
 
 /// Generates a WebSocket upgrade response from the provided headers.
@@ -522,15 +537,7 @@ where
 ///
 /// # Returns
 ///
-/// This function returns a `Result` containing:
-/// - A tuple consisting of:
-///   - An `http::Response<()>`, which represents the WebSocket handshake response.
-///     The response includes headers such as `Sec-WebSocket-Accept` to confirm the upgrade.
-///   - An optional `E::Extension`, which represents the negotiated extension, if any.
-///
-/// If the handshake fails, an `Error` is returned, which may be caused by invalid
-/// requests, issues parsing headers, or problems negotiating the WebSocket subprotocols
-/// or extensions.
+/// The negotiated response and the selected subprotocol and extension, if any.
 ///
 /// # Type Parameters
 ///
@@ -547,7 +554,7 @@ pub fn response_from_headers<E>(
     headers: &HeaderMap,
     extension: E,
     subprotocols: &SubprotocolRegistry,
-) -> Result<(Response<()>, Option<E::Extension>), Error>
+) -> Result<UpgradeResponseParts<E::Extension>, Error>
 where
     E: ExtensionProvider,
 {
@@ -568,9 +575,12 @@ where
         .version(Version::HTTP_11)
         .status(StatusCode::SWITCHING_PROTOCOLS)
         .body(())?;
-    *response.headers_mut() = build_response_headers(key, subprotocol, extension_header)?;
-
-    Ok((response, extension))
+    *response.headers_mut() = build_response_headers(key, subprotocol.clone(), extension_header)?;
+    Ok(UpgradeResponseParts {
+        response,
+        subprotocol,
+        extension,
+    })
 }
 
 /// Constructs the HTTP response headers for a WebSocket handshake response.
