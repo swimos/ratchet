@@ -484,7 +484,7 @@ pub fn build_response(
 /// - Failure to negotiate the WebSocket extensions or subprotocols.
 pub fn handshake<E, B>(
     request: http::Request<B>,
-    extension: &E,
+    extension: E,
     subprotocols: &SubprotocolRegistry,
 ) -> Result<(Response<()>, Option<E::Extension>), Error>
 where
