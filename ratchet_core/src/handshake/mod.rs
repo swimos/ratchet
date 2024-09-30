@@ -38,7 +38,7 @@ pub use client::{subscribe, subscribe_with, UpgradedClient};
 pub use server::{
     accept, accept_with, build_response, build_response_headers, handshake, parse_request_parts,
     response_from_headers, validate_method_and_version, UpgradeRequest, UpgradeRequestParts,
-    UpgradedServer, WebSocketResponse, WebSocketUpgrader,
+    UpgradeResponseParts, UpgradedServer, WebSocketResponse, WebSocketUpgrader,
 };
 pub use subprotocols::*;
 
