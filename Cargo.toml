@@ -14,13 +14,19 @@ members = [
 ]
 
 [workspace.package]
-version = "1.1.0"
+version = "1.1.1"
 authors = ["Swim Inc. developers info@swim.ai"]
 edition = "2021"
 categories = ["network-programming", "asynchronous", "web-programming::websocket"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
+ratchet = { package = "ratchet_rs", version = "1.1.1", path = "ratchet_rs" }
+ratchet_core = { version = "1.1.1", path = "ratchet_core" }
+ratchet_ext = { version = "1.1.1", path = "ratchet_ext" }
+ratchet_deflate = { version = "1.1.1", path = "ratchet_deflate" }
+ratchet_fixture = { version = "1.1.1", path = "ratchet_fixture" }
+
 url = "2.1.1"
 http = "1.1.0"
 tokio = "1.22"

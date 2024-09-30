@@ -17,9 +17,9 @@ split = ["ratchet_core/split"]
 fixture = ["ratchet_core/fixture"]
 
 [dependencies]
-ratchet_core = { version = "1.0.3", path = "../ratchet_core" }
-ratchet_ext = { version = "1.0.3", path = "../ratchet_ext" }
-ratchet_deflate = { version = "1.0.3", path = "../ratchet_deflate", optional = true }
+ratchet_core = { workspace = true }
+ratchet_ext = { workspace = true }
+ratchet_deflate = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 log = { workspace = true }
 
