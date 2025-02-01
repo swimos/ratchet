@@ -45,7 +45,7 @@ async fn main() -> Result<(), Error> {
   )
   .await?;
 
-  let UpgradedClient { socket, subprotocol } = upgraded;
+  let UpgradedClient { websocket, subprotocol } = upgraded;
   let mut buf = BytesMut::new();
 
   loop {
